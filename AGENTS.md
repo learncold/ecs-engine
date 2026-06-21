@@ -1,0 +1,257 @@
+# AGENTS.md
+
+## Project Overview
+
+This project is a graduation research project for building a C++ ECS-based lightweight game engine prototype and evaluating it through a 3D Boids swarm intelligence simulation.
+
+The project is not trying to become a general-purpose 3D game engine like Unity or Unreal Engine. In this repository, "game engine" means a minimal real-time runtime layer that supports:
+
+- Application and game loop
+- Window and input handling
+- Time step management
+- Scene or World management
+- ECS-based object management
+- Rendering
+- Simulation update
+- Debug and benchmark measurement
+
+The 3D Boids simulation is the research demo that runs on top of this runtime.
+
+## Research Focus
+
+Prioritize the submitted graduation project direction:
+
+- ECS architecture
+- Data-Oriented Design
+- 3D Boids swarm simulation
+- OOP vs ECS performance comparison
+- 3D Grid-based spatial partitioning optimization
+- Quantitative performance measurement
+
+Do not shift the project toward unrelated gameplay features, asset tooling, or a broad commercial engine feature set unless they directly support the research goal.
+
+## Tech Stack
+
+- Language: C++20
+- Graphics API: OpenGL 3.3 Core Profile
+- Window/Input: GLFW
+- OpenGL Loader: GLAD
+- Build System: CMake
+- Dependency Management: vcpkg + vendored GLAD
+
+## Build Commands
+
+Use the Visual Studio 2022 preset by default.
+
+```powershell
+cmake --preset vs2022
+cmake --build --preset vs2022-debug
+```
+
+The sandbox executable is generated at:
+
+```text
+build/vs2022/Sandbox/Debug/Sandbox.exe
+```
+
+Visual Studio 2026 presets are available, but `vs2022` is the default verification path unless there is a specific reason to use another preset.
+
+## Project Structure
+
+```text
+ECS-engine/
+├─ AGENTS.md
+├─ CMakeLists.txt
+├─ CMakePresets.json
+├─ README.md
+├─ vcpkg.json
+├─ docs/
+│  ├─ research-goals.md
+│  ├─ tech-stack.md
+│  ├─ uml/
+│  │  └─ engine-components.puml
+│  ├─ 제출용_붙임2_계획서.pdf
+│  └─ 제출용_붙임3_신청서.pdf
+├─ Engine/
+│  ├─ CMakeLists.txt
+│  ├─ include/
+│  │  └─ Engine/
+│  └─ src/
+├─ Sandbox/
+│  ├─ CMakeLists.txt
+│  └─ src/
+└─ third_party/
+   └─ glad/
+```
+
+## Directory Responsibilities
+
+`Engine/` contains reusable engine runtime code. Put engine systems, ECS infrastructure, renderer code, input handling, time management, scene/world code, simulation systems, and benchmark support here.
+
+`Sandbox/` contains executable demos and experiments that use `Engine`. The Boids research demo and OOP/ECS comparison scenarios belong here or in clearly named demo modules that are wired through `Sandbox`.
+
+`third_party/glad/` contains vendored GLAD source generated for OpenGL loading. Do not replace it casually. If GLAD is regenerated, document the OpenGL API/profile used.
+
+`build/` is generated output and must not be committed.
+
+## Docs Folder
+
+`docs/research-goals.md` defines the research problem, scope, research questions, experiment design, performance metrics, priorities, and exclusions. Update this file when the academic direction changes.
+
+`docs/tech-stack.md` explains the implementation stack, dependency policy, engine scope, and rendering scope. Update this file when build tools, dependencies, graphics API assumptions, or runtime scope change.
+
+`docs/uml/` contains PlantUML source files for architecture and design diagrams. `docs/uml/engine-components.puml` describes the high-level component architecture of the lightweight engine runtime, Sandbox demos, simulation modules, rendering modules, benchmarking modules, and third-party dependencies.
+
+`docs/제출용_붙임2_계획서.pdf` and `docs/제출용_붙임3_신청서.pdf` are submitted graduation project documents. Treat them as reference material for the original approved topic. Do not edit or replace them unless explicitly requested.
+
+Future recommended docs:
+
+- `docs/architecture.md` for module-level architecture
+- `docs/ecs-design.md` for ECS storage and API decisions
+- `docs/benchmark-plan.md` for measurement procedures
+
+## Architecture Direction
+
+Keep the project centered on a lightweight runtime, not a full editor or asset pipeline. The target architecture should evolve toward:
+
+```text
+Engine.Core
+Engine.ECS
+Engine.Renderer
+Engine.Input
+Engine.Scene
+Engine.Simulation
+Engine.Benchmark
+```
+
+The runtime should support the research demo with the least unnecessary surface area.
+
+## ECS Design Rules
+
+- Entity should be a lightweight ID.
+- Components should be plain data where possible.
+- Systems should contain behavior and operate on component data.
+- Avoid putting game logic directly into entity classes.
+- Prefer contiguous component storage for simulation-critical data.
+- Keep the first ECS implementation simple and measurable before optimizing it.
+- Do not introduce archetype complexity until the simpler storage strategy is implemented and benchmarked.
+
+Initial ECS implementation may use Sparse Set or type-based component arrays. Archetype ECS is an extension goal, not the first milestone.
+
+## Simulation Rules
+
+The core research simulation is 3D Boids.
+
+Required simulation data should include:
+
+- 3D position
+- 3D velocity
+- Boid parameters
+- Neighbor search radius
+- Separation, Alignment, and Cohesion weights
+
+Prefer deterministic setup for benchmark scenarios. Random initialization should use explicit seeds when performance data will be collected.
+
+## Rendering Scope
+
+Rendering exists to support real-time visualization and performance experiments.
+
+Prioritize:
+
+- Basic camera
+- Simple 3D agent visualization
+- Low-poly triangle or cone-like agent mesh
+- Instanced Rendering for many agents
+- Stable frame timing
+
+Do not prioritize:
+
+- General-purpose 3D model loading
+- PBR
+- Advanced lighting and shadows
+- Skeletal animation
+- Scene editor
+- Commercial-engine asset pipeline
+
+## Benchmarking Rules
+
+Performance experiments should measure at least:
+
+- FPS
+- Frame time
+- Simulation update time
+- Rendering time
+- Memory usage if practical
+
+Agent counts should be tested in fixed steps, for example:
+
+```text
+100
+500
+1000
+3000
+5000
+10000
+```
+
+Benchmark comparisons should separate simulation cost from rendering cost where possible.
+
+Required comparison paths:
+
+- OOP Boids implementation
+- ECS Boids implementation
+- Naive all-pairs neighbor search
+- 3D Grid-based spatial partitioning
+
+## Coding Style
+
+- Use C++20.
+- Prefer clear ownership and explicit lifetimes.
+- Avoid unnecessary inheritance.
+- Avoid global mutable state unless there is a clear engine-level reason.
+- Keep headers minimal.
+- Keep dependencies limited.
+- Use `const` where appropriate.
+- Prefer small, focused classes and systems.
+- Keep code changes scoped to the feature or experiment being implemented.
+
+## Dependency Rules
+
+GLFW is managed through `vcpkg.json`.
+
+GLAD is vendored under `third_party/glad` because it is generated for the selected OpenGL API/profile. Do not add another OpenGL loader.
+
+Avoid adding new dependencies unless they materially reduce implementation risk or are necessary for the research goal.
+
+## Git Rules
+
+Do not commit generated build output.
+
+Ignored paths should include:
+
+```text
+build/
+.vs/
+out/
+```
+
+Before committing code changes, verify the default build path:
+
+```powershell
+cmake --preset vs2022
+cmake --build --preset vs2022-debug
+```
+
+## Current Priority
+
+The next implementation priority is:
+
+1. Define ECS core interfaces
+2. Implement Entity and Registry
+3. Add Transform and Velocity components using 3D vectors
+4. Add MovementSystem
+5. Add Boid components and BoidSystem
+6. Add simple 3D rendering for agents
+7. Add benchmark timing
+8. Add OOP comparison implementation
+9. Add 3D Grid spatial partitioning
