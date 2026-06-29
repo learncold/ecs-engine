@@ -3,6 +3,8 @@ add_library(Engine STATIC)
 target_sources(Engine
     PRIVATE
         src/Core/Application.cpp
+        src/ECS/Registry.cpp
+        src/ECS/System.cpp
 )
 
 target_include_directories(Engine
@@ -24,4 +26,3 @@ if(MSVC)
 else()
     target_compile_options(Engine PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-
