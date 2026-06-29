@@ -4,6 +4,7 @@ title ECS Engine Prototype - Component Architecture
 skinparam componentStyle rectangle
 skinparam shadowing false
 skinparam packageStyle rectangle
+skinparam linetype ortho
 
 package "Sandbox" {
   [Boids Demo] as BoidsDemo

@@ -1,0 +1,57 @@
+@startuml
+title ECS Engine Prototype - Engine Overview
+
+left to right direction
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+package "Sandbox" {
+  [Boids Demo] as BoidsDemo
+  [Benchmark Runner] as BenchmarkRunner
+}
+
+package "Engine Runtime" as EngineRuntime {
+  [Application] as Application
+  [Platform] as Platform
+  [World] as World
+  [ECS] as ECS
+  [Simulation] as Simulation
+  [Renderer] as Renderer
+  [Benchmark] as Benchmark
+}
+
+package "Third Party" {
+  [GLFW] as GLFW
+  [GLAD] as GLAD
+  [OpenGL 3.3] as OpenGL
+}
+
+BoidsDemo --> Application
+BenchmarkRunner --> Application
+BenchmarkRunner --> Benchmark
+
+Application --> Platform
+Application --> World
+Application --> Renderer
+Application --> Benchmark
+
+World --> ECS
+World --> Simulation
+Simulation --> ECS
+Renderer --> ECS
+
+Platform --> GLFW
+Renderer --> GLAD
+Renderer --> OpenGL
+GLFW --> OpenGL
+GLAD --> OpenGL
+
+note bottom of EngineRuntime
+  Minimal runtime for the research prototype:
+  loop, platform, world, ECS, rendering, simulation, metrics.
+end note
+
+@enduml

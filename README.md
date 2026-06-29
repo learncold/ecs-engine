@@ -81,7 +81,12 @@ ECS-engine/
 │  ├─ tech-stack.md
 │  ├─ research-goals.md
 │  └─ uml/
-│     └─ engine-components.puml
+│     ├─ engine-components.puml
+│     ├─ engine-overview.puml
+│     ├─ runtime-loop.puml
+│     ├─ ecs-architecture.puml
+│     ├─ component-storage.puml
+│     └─ oop-vs-ecs-comparison.puml
 ├─ Engine/
 ├─ Sandbox/
 └─ third_party/
