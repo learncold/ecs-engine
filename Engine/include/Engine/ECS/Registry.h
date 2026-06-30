@@ -113,14 +113,14 @@ public:
     [[nodiscard]] Component* TryGet(Entity entity)
     {
         auto* storage = FindStorage<Component>();
-        return storage != nullptr && storage->Contains(entity) ? &storage->Get(entity) : nullptr;
+        return storage != nullptr ? storage->TryGet(entity) : nullptr;
     }
 
     template <typename Component>
     [[nodiscard]] const Component* TryGet(Entity entity) const
     {
         const auto* storage = FindStorage<Component>();
-        return storage != nullptr && storage->Contains(entity) ? &storage->Get(entity) : nullptr;
+        return storage != nullptr ? storage->TryGet(entity) : nullptr;
     }
 
     template <typename... Components>
@@ -208,22 +208,19 @@ class View {
 
 public:
     explicit View(Registry& registry)
-        : registry_(&registry)
+        : storages_(registry.template FindStorage<Components>()...)
     {
     }
 
     template <typename Function>
     void Each(Function&& function)
     {
-        using DriverComponent = std::tuple_element_t<0U, std::tuple<Components...>>;
-
-        auto* driverStorage = registry_->template FindStorage<DriverComponent>();
-        if (driverStorage == nullptr) {
+        if (!HasRequiredStorages()) {
             return;
         }
 
-        for (Entity entity : driverStorage->Entities()) {
-            if ((registry_->template Has<Components>(entity) && ...)) {
+        for (Entity entity : DriverStorage().Entities()) {
+            if (ContainsAll(entity)) {
                 Invoke(function, entity);
             }
         }
@@ -239,19 +236,51 @@ private:
     template <typename>
     static constexpr bool AlwaysFalse = false;
 
+    using StorageTuple = std::tuple<ComponentStorage<Components>*...>;
+    using DriverComponent = std::tuple_element_t<0U, std::tuple<Components...>>;
+
+    [[nodiscard]] bool HasRequiredStorages() const
+    {
+        return std::apply(
+            [](const auto*... storages) {
+                return ((storages != nullptr) && ...);
+            },
+            storages_);
+    }
+
+    [[nodiscard]] ComponentStorage<DriverComponent>& DriverStorage()
+    {
+        return *std::get<0U>(storages_);
+    }
+
+    [[nodiscard]] bool ContainsAll(Entity entity) const
+    {
+        return std::apply(
+            [entity](const auto*... storages) {
+                return (storages->Contains(entity) && ...);
+            },
+            storages_);
+    }
+
     template <typename Function>
     void Invoke(Function& function, Entity entity)
     {
+        InvokeWithComponents(function, entity, std::index_sequence_for<Components...>{});
+    }
+
+    template <typename Function, std::size_t... ComponentIndices>
+    void InvokeWithComponents(Function& function, Entity entity, std::index_sequence<ComponentIndices...>)
+    {
         if constexpr (std::is_invocable_v<Function&, Entity, Components&...>) {
-            std::invoke(function, entity, registry_->template Get<Components>(entity)...);
+            std::invoke(function, entity, (*std::get<ComponentIndices>(storages_)->TryGet(entity))...);
         } else if constexpr (std::is_invocable_v<Function&, Components&...>) {
-            std::invoke(function, registry_->template Get<Components>(entity)...);
+            std::invoke(function, (*std::get<ComponentIndices>(storages_)->TryGet(entity))...);
         } else {
             static_assert(AlwaysFalse<Function>, "View callback must accept (Entity, Components&...) or (Components&...)");
         }
     }
 
-    Registry* registry_ = nullptr;
+    StorageTuple storages_;
 };
 
 } // namespace Engine::ECS

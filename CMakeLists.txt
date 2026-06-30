@@ -17,3 +17,7 @@ add_subdirectory(third_party/glad)
 add_subdirectory(Engine)
 add_subdirectory(Sandbox)
 
+include(CTest)
+if(BUILD_TESTING)
+    add_subdirectory(Tests)
+endif()

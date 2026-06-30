@@ -94,6 +94,16 @@ public:
         return dense_components_[sparse_[entity.Value()]];
     }
 
+    [[nodiscard]] Component* TryGet(Entity entity)
+    {
+        return Contains(entity) ? &dense_components_[sparse_[entity.Value()]] : nullptr;
+    }
+
+    [[nodiscard]] const Component* TryGet(Entity entity) const
+    {
+        return Contains(entity) ? &dense_components_[sparse_[entity.Value()]] : nullptr;
+    }
+
     [[nodiscard]] const std::vector<Entity>& Entities() const
     {
         return dense_entities_;
