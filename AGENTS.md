@@ -68,13 +68,7 @@ ECS-engine/
 ├─ docs/
 │  ├─ research-goals.md
 │  ├─ tech-stack.md
-│  ├─ uml/
-│  │  ├─ engine-components.puml
-│  │  ├─ engine-overview.puml
-│  │  ├─ runtime-loop.puml
-│  │  ├─ ecs-architecture.puml
-│  │  ├─ component-storage.puml
-│  │  └─ oop-vs-ecs-comparison.puml
+│  ├─ architecture.md
 │  ├─ 제출용_붙임2_계획서.pdf
 │  └─ 제출용_붙임3_신청서.pdf
 ├─ Engine/
@@ -91,9 +85,9 @@ ECS-engine/
 
 ## Directory Responsibilities
 
-`Engine/` contains reusable engine runtime code. Put engine systems, ECS infrastructure, renderer code, input handling, time management, scene/world code, simulation systems, and benchmark support here.
+`Engine/` contains reusable runtime code. Put ECS infrastructure, renderer code, input handling, time management, scene/world code, and benchmark support here. Keep research-demo-specific Boids behavior out of this directory.
 
-`Sandbox/` contains executable demos and experiments that use `Engine`. The Boids research demo and OOP/ECS comparison scenarios belong here or in clearly named demo modules that are wired through `Sandbox`.
+`Sandbox/` contains executable demos and experiments that use `Engine`. Keep the Boids research demo and its OOP/ECS implementations here. The OOP implementation must not depend on `Engine/ECS`; only the ECS implementation uses that module. Shared initial conditions, parameters, and render data may be placed in a common Boids area.
 
 `third_party/glad/` contains vendored GLAD source generated for OpenGL loading. Do not replace it casually. If GLAD is regenerated, document the OpenGL API/profile used.
 
@@ -105,13 +99,12 @@ ECS-engine/
 
 `docs/tech-stack.md` explains the implementation stack, dependency policy, engine scope, and rendering scope. Update this file when build tools, dependencies, graphics API assumptions, or runtime scope change.
 
-`docs/uml/` contains PlantUML source files for architecture and design diagrams. `docs/uml/engine-overview.puml` is the primary high-level overview. `docs/uml/runtime-loop.puml`, `docs/uml/ecs-architecture.puml`, `docs/uml/component-storage.puml`, and `docs/uml/oop-vs-ecs-comparison.puml` split runtime flow, ECS structure, storage layout, and comparison design into focused views. `docs/uml/engine-components.puml` is the older detailed component view and may be simplified or retired after the focused diagrams stabilize.
+`docs/architecture.md` gives a concise overview of module responsibilities, runtime flow, ECS data organization, and the OOP/ECS comparison boundary. Keep it aligned with the implemented design and avoid speculative layers that are not needed by the research prototype.
 
 `docs/제출용_붙임2_계획서.pdf` and `docs/제출용_붙임3_신청서.pdf` are submitted graduation project documents. Treat them as reference material for the original approved topic. Do not edit or replace them unless explicitly requested.
 
-Future recommended docs:
+Future recommended docs, only when their topics need more detail:
 
-- `docs/architecture.md` for module-level architecture
 - `docs/ecs-design.md` for ECS storage and API decisions
 - `docs/benchmark-plan.md` for measurement procedures
 
@@ -125,11 +118,10 @@ Engine.ECS
 Engine.Renderer
 Engine.Input
 Engine.Scene
-Engine.Simulation
 Engine.Benchmark
 ```
 
-The runtime should support the research demo with the least unnecessary surface area.
+The runtime should support the research demo with the least unnecessary surface area. Boids-specific simulation code belongs in `Sandbox`, not in a general engine simulation module.
 
 ## ECS Design Rules
 

@@ -1,28 +1,38 @@
-add_library(Engine STATIC)
+function(configure_engine_target target_name)
+    target_include_directories(${target_name}
+        PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
 
-target_sources(Engine
-    PRIVATE
-        src/Core/Application.cpp
-        src/ECS/Registry.cpp
-        src/ECS/System.cpp
+    target_compile_features(${target_name} PUBLIC cxx_std_20)
+
+    if(MSVC)
+        target_compile_options(${target_name} PRIVATE /W4)
+    else()
+        target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endfunction()
+
+add_library(EngineCore STATIC
+    src/Core/Application.cpp
 )
 
-target_include_directories(Engine
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
+add_library(Engine::Core ALIAS EngineCore)
 
-target_link_libraries(Engine
+target_link_libraries(EngineCore
     PUBLIC
         glad
         glfw
         OpenGL::GL
 )
 
-target_compile_features(Engine PUBLIC cxx_std_20)
+configure_engine_target(EngineCore)
 
-if(MSVC)
-    target_compile_options(Engine PRIVATE /W4)
-else()
-    target_compile_options(Engine PRIVATE -Wall -Wextra -Wpedantic)
-endif()
+add_library(EngineECS STATIC
+    src/ECS/Registry.cpp
+    src/ECS/System.cpp
+)
+
+add_library(Engine::ECS ALIAS EngineECS)
+
+configure_engine_target(EngineECS)
