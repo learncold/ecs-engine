@@ -68,13 +68,7 @@ ECS-engine/
 ├─ docs/
 │  ├─ research-goals.md
 │  ├─ tech-stack.md
-│  ├─ uml/
-│  │  ├─ engine-components.puml
-│  │  ├─ engine-overview.puml
-│  │  ├─ runtime-loop.puml
-│  │  ├─ ecs-architecture.puml
-│  │  ├─ component-storage.puml
-│  │  └─ oop-vs-ecs-comparison.puml
+│  ├─ architecture.md
 │  ├─ 제출용_붙임2_계획서.pdf
 │  └─ 제출용_붙임3_신청서.pdf
 ├─ Engine/
@@ -105,13 +99,12 @@ ECS-engine/
 
 `docs/tech-stack.md` explains the implementation stack, dependency policy, engine scope, and rendering scope. Update this file when build tools, dependencies, graphics API assumptions, or runtime scope change.
 
-`docs/uml/` contains PlantUML source files for architecture and design diagrams. `docs/uml/engine-overview.puml` is the primary high-level overview. `docs/uml/runtime-loop.puml`, `docs/uml/ecs-architecture.puml`, `docs/uml/component-storage.puml`, and `docs/uml/oop-vs-ecs-comparison.puml` split runtime flow, ECS structure, storage layout, and comparison design into focused views. `docs/uml/engine-components.puml` is the older detailed component view and may be simplified or retired after the focused diagrams stabilize.
+`docs/architecture.md` gives a concise overview of module responsibilities, runtime flow, ECS data organization, and the OOP/ECS comparison boundary. Keep it aligned with the implemented design and avoid speculative layers that are not needed by the research prototype.
 
 `docs/제출용_붙임2_계획서.pdf` and `docs/제출용_붙임3_신청서.pdf` are submitted graduation project documents. Treat them as reference material for the original approved topic. Do not edit or replace them unless explicitly requested.
 
-Future recommended docs:
+Future recommended docs, only when their topics need more detail:
 
-- `docs/architecture.md` for module-level architecture
 - `docs/ecs-design.md` for ECS storage and API decisions
 - `docs/benchmark-plan.md` for measurement procedures
 
