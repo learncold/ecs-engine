@@ -85,9 +85,9 @@ ECS-engine/
 
 ## Directory Responsibilities
 
-`Engine/` contains reusable engine runtime code. Put engine systems, ECS infrastructure, renderer code, input handling, time management, scene/world code, simulation systems, and benchmark support here.
+`Engine/` contains reusable runtime code. Put ECS infrastructure, renderer code, input handling, time management, scene/world code, and benchmark support here. Keep research-demo-specific Boids behavior out of this directory.
 
-`Sandbox/` contains executable demos and experiments that use `Engine`. The Boids research demo and OOP/ECS comparison scenarios belong here or in clearly named demo modules that are wired through `Sandbox`.
+`Sandbox/` contains executable demos and experiments that use `Engine`. Keep the Boids research demo and its OOP/ECS implementations here. The OOP implementation must not depend on `Engine/ECS`; only the ECS implementation uses that module. Shared initial conditions, parameters, and render data may be placed in a common Boids area.
 
 `third_party/glad/` contains vendored GLAD source generated for OpenGL loading. Do not replace it casually. If GLAD is regenerated, document the OpenGL API/profile used.
 
@@ -118,11 +118,10 @@ Engine.ECS
 Engine.Renderer
 Engine.Input
 Engine.Scene
-Engine.Simulation
 Engine.Benchmark
 ```
 
-The runtime should support the research demo with the least unnecessary surface area.
+The runtime should support the research demo with the least unnecessary surface area. Boids-specific simulation code belongs in `Sandbox`, not in a general engine simulation module.
 
 ## ECS Design Rules
 

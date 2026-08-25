@@ -7,7 +7,7 @@ target_sources(Sandbox
 
 target_link_libraries(Sandbox
     PRIVATE
-        Engine
+        Engine::Core
 )
 
 target_compile_features(Sandbox PRIVATE cxx_std_20)
@@ -17,4 +17,3 @@ if(MSVC)
 else()
     target_compile_options(Sandbox PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-

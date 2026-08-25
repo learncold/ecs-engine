@@ -4,7 +4,7 @@ add_executable(ECSViewTests
 
 target_link_libraries(ECSViewTests
     PRIVATE
-        Engine
+        Engine::ECS
 )
 
 target_compile_features(ECSViewTests PRIVATE cxx_std_20)
