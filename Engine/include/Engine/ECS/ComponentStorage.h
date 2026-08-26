@@ -56,7 +56,7 @@ public:
 
         dense_components_.pop_back();
         dense_entities_.pop_back();
-        sparse_[entity.Value()] = MissingIndex;
+        sparse_[entity.Value()] = Entity::InvalidId;
     }
 
     void Clear() override
@@ -71,7 +71,7 @@ public:
         const Entity::IdType entityId = entity.Value();
         return entity.IsValid()
             && entityId < sparse_.size()
-            && sparse_[entityId] != MissingIndex
+            && sparse_[entityId] != Entity::InvalidId;
             && sparse_[entityId] < dense_entities_.size()
             && dense_entities_[sparse_[entityId]] == entity;
     }
@@ -115,9 +115,7 @@ public:
     }
 
 private:
-    static constexpr std::size_t MissingIndex = std::numeric_limits<std::size_t>::max();
-
-    //특정 Entity에 대한 sparse 벡터 크기를 확보
+    // ensure sparse vector size for some entity
     void EnsureSparseSize(Entity entity)
     {
         if (!entity.IsValid()) {
@@ -126,7 +124,7 @@ private:
 
         const std::size_t requiredSize = static_cast<std::size_t>(entity.Value()) + 1U;
         if (requiredSize > sparse_.size()) {
-            sparse_.resize(requiredSize, MissingIndex);
+            sparse_.resize(requiredSize, Entity::InvalidId);
         }
     }
 
