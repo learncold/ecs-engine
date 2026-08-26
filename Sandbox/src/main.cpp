@@ -1,4 +1,4 @@
-#include "Engine/Core/Application.h"
+#include "Engine/Core/application.h"
 
 int main()
 {
@@ -11,4 +11,3 @@ int main()
     app.Run();
     return 0;
 }
-

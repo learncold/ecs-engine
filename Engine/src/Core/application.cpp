@@ -1,4 +1,4 @@
-#include "Engine/Core/Application.h"
+#include "Engine/Core/application.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -79,4 +79,3 @@ void Application::Shutdown()
 }
 
 } // namespace Engine
-

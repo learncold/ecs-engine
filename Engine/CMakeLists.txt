@@ -14,7 +14,7 @@ function(configure_engine_target target_name)
 endfunction()
 
 add_library(EngineCore STATIC
-    src/Core/Application.cpp
+    src/Core/application.cpp
 )
 
 add_library(Engine::Core ALIAS EngineCore)
