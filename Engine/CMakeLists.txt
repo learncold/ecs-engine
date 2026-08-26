@@ -29,8 +29,8 @@ target_link_libraries(EngineCore
 configure_engine_target(EngineCore)
 
 add_library(EngineECS STATIC
-    src/ECS/Registry.cpp
-    src/ECS/System.cpp
+    src/ECS/registry.cpp
+    src/ECS/system.cpp
 )
 
 add_library(Engine::ECS ALIAS EngineECS)

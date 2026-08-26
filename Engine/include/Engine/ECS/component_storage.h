@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/ECS/Entity.h"
+#include "Engine/ECS/entity.h"
 
 #include <cstddef>
 #include <limits>
@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-namespace Engine::ECS {
+namespace engine::ecs {
 
 class IComponentStorage {
 public:
@@ -45,18 +45,18 @@ public:
             return;
         }
 
-        const std::size_t removedIndex = sparse_[entity.Value()];
-        const std::size_t lastIndex = dense_entities_.size() - 1U;
+        const std::size_t removed_index = sparse_[entity.Value()];
+        const std::size_t last_index = dense_entities_.size() - 1U;
 
-        if (removedIndex != lastIndex) {
-            dense_components_[removedIndex] = std::move(dense_components_[lastIndex]);
-            dense_entities_[removedIndex] = dense_entities_[lastIndex];
-            sparse_[dense_entities_[removedIndex].Value()] = removedIndex;
+        if (removed_index != last_index) {
+            dense_components_[removed_index] = std::move(dense_components_[last_index]);
+            dense_entities_[removed_index] = dense_entities_[last_index];
+            sparse_[dense_entities_[removed_index].Value()] = removed_index;
         }
 
         dense_components_.pop_back();
         dense_entities_.pop_back();
-        sparse_[entity.Value()] = Entity::InvalidId;
+        sparse_[entity.Value()] = Entity::kInvalidId;
     }
 
     void Clear() override
@@ -68,12 +68,12 @@ public:
 
     [[nodiscard]] bool Contains(Entity entity) const
     {
-        const Entity::IdType entityId = entity.Value();
+        const Entity::IdType entity_id = entity.Value();
         return entity.IsValid()
-            && entityId < sparse_.size()
-            && sparse_[entityId] != Entity::InvalidId;
-            && sparse_[entityId] < dense_entities_.size()
-            && dense_entities_[sparse_[entityId]] == entity;
+            && entity_id < sparse_.size()
+            && sparse_[entity_id] != Entity::kInvalidId
+            && sparse_[entity_id] < dense_entities_.size()
+            && dense_entities_[sparse_[entity_id]] == entity;
     }
 
     [[nodiscard]] Component& Get(Entity entity)
@@ -122,9 +122,9 @@ private:
             throw std::invalid_argument("Cannot store a component for an invalid entity");
         }
 
-        const std::size_t requiredSize = static_cast<std::size_t>(entity.Value()) + 1U;
-        if (requiredSize > sparse_.size()) {
-            sparse_.resize(requiredSize, Entity::InvalidId);
+        const std::size_t required_size = static_cast<std::size_t>(entity.Value()) + 1U;
+        if (required_size > sparse_.size()) {
+            sparse_.resize(required_size, Entity::kInvalidId);
         }
     }
 
@@ -133,4 +133,4 @@ private:
     std::vector<Component> dense_components_;
 };
 
-} // namespace Engine::ECS
+} // namespace engine::ecs

@@ -43,7 +43,7 @@ Entity는 가벼운 숫자 ID이고, Component는 데이터를 가지며, System
 같은 타입의 Component는 Sparse Set 기반 저장소에 모아 둔다. System은 다음과 같이 타입이 지정된 View를 통해 필요한 Entity만 순회한다.
 
 ```cpp
-registry.view<Transform, Velocity>().each(
+registry.CreateView<Transform, Velocity>().Each(
     [](Transform& transform, Velocity& velocity) {
         // 속도를 이용해 위치를 갱신한다.
     });

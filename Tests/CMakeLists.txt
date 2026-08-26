@@ -1,5 +1,5 @@
 add_executable(ECSViewTests
-    ECSViewTests.cpp
+    ecs_view_tests.cpp
 )
 
 target_link_libraries(ECSViewTests

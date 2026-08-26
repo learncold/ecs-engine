@@ -3,13 +3,13 @@
 #include <cstdint>
 #include <limits>
 
-namespace Engine::ECS {
+namespace engine::ecs {
 
 class Entity {
 public:
     using IdType = std::uint32_t;
 
-    static constexpr IdType InvalidId = std::numeric_limits<IdType>::max();
+    static constexpr IdType kInvalidId = std::numeric_limits<IdType>::max();
 
     constexpr Entity() = default;
     explicit constexpr Entity(IdType value)
@@ -24,7 +24,7 @@ public:
 
     [[nodiscard]] constexpr bool IsValid() const
     {
-        return value_ != InvalidId;
+        return value_ != kInvalidId;
     }
 
     friend constexpr bool operator==(Entity left, Entity right)
@@ -38,7 +38,7 @@ public:
     }
 
 private:
-    IdType value_ = InvalidId;
+    IdType value_ = kInvalidId;
 };
 
-} // namespace Engine::ECS
+} // namespace engine::ecs

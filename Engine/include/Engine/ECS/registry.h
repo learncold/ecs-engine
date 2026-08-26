@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Engine/ECS/ComponentStorage.h"
-#include "Engine/ECS/Entity.h"
+#include "Engine/ECS/component_storage.h"
+#include "Engine/ECS/entity.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-namespace Engine::ECS {
+namespace engine::ecs {
 
 template <typename... Components>
 class View;
@@ -28,9 +28,9 @@ public:
     {
         Entity entity(next_entity_id_++);
 
-        const std::size_t requiredSize = static_cast<std::size_t>(entity.Value()) + 1U;
-        if (requiredSize > alive_entities_.size()) {
-            alive_entities_.resize(requiredSize, std::uint8_t{0});
+        const std::size_t required_size = static_cast<std::size_t>(entity.Value()) + 1U;
+        if (required_size > alive_entities_.size()) {
+            alive_entities_.resize(required_size, std::uint8_t{0});
         }
 
         alive_entities_[entity.Value()] = std::uint8_t{1};
@@ -44,8 +44,8 @@ public:
             return;
         }
 
-        for (auto& storageEntry : component_storages_) {
-            storageEntry.second->Remove(entity);
+        for (auto& storage_entry : component_storages_) {
+            storage_entry.second->Remove(entity);
         }
 
         alive_entities_[entity.Value()] = std::uint8_t{0};
@@ -54,10 +54,10 @@ public:
 
     [[nodiscard]] bool IsAlive(Entity entity) const
     {
-        const Entity::IdType entityId = entity.Value();
+        const Entity::IdType entity_id = entity.Value();
         return entity.IsValid()
-            && entityId < alive_entities_.size()
-            && alive_entities_[entityId] != std::uint8_t{0};
+            && entity_id < alive_entities_.size()
+            && alive_entities_[entity_id] != std::uint8_t{0};
     }
 
     [[nodiscard]] std::size_t EntityCount() const
@@ -69,7 +69,7 @@ public:
     Component& Emplace(Entity entity, Args&&... args)
     {
         ValidateAliveEntity(entity);
-        return Storage<Component>().Emplace(entity, std::forward<Args>(args)...);
+        return GetOrCreateStorage<Component>().Emplace(entity, std::forward<Args>(args)...);
     }
 
     template <typename Component>
@@ -129,12 +129,6 @@ public:
         return View<Components...>(*this);
     }
 
-    template <typename... Components>
-    [[nodiscard]] View<Components...> view()
-    {
-        return CreateView<Components...>();
-    }
-
     void Clear()
     {
         component_storages_.clear();
@@ -145,45 +139,45 @@ public:
 
 private:
     template <typename Component>
-    ComponentStorage<Component>& Storage()
+    ComponentStorage<Component>& GetOrCreateStorage()
     {
-        const std::type_index typeKey(typeid(Component));
-        auto storageIterator = component_storages_.find(typeKey);
+        const std::type_index type_key(typeid(Component));
+        auto storage_iterator = component_storages_.find(type_key);
 
-        if (storageIterator == component_storages_.end()) {
+        if (storage_iterator == component_storages_.end()) {
             auto inserted = component_storages_.emplace(
-                typeKey,
+                type_key,
                 std::make_unique<ComponentStorage<Component>>());
-            storageIterator = inserted.first;
+            storage_iterator = inserted.first;
         }
 
-        return static_cast<ComponentStorage<Component>&>(*storageIterator->second);
+        return static_cast<ComponentStorage<Component>&>(*storage_iterator->second);
     }
 
     template <typename Component>
     [[nodiscard]] ComponentStorage<Component>* FindStorage()
     {
-        const std::type_index typeKey(typeid(Component));
-        const auto storageIterator = component_storages_.find(typeKey);
+        const std::type_index type_key(typeid(Component));
+        const auto storage_iterator = component_storages_.find(type_key);
 
-        if (storageIterator == component_storages_.end()) {
+        if (storage_iterator == component_storages_.end()) {
             return nullptr;
         }
 
-        return static_cast<ComponentStorage<Component>*>(storageIterator->second.get());
+        return static_cast<ComponentStorage<Component>*>(storage_iterator->second.get());
     }
 
     template <typename Component>
     [[nodiscard]] const ComponentStorage<Component>* FindStorage() const
     {
-        const std::type_index typeKey(typeid(Component));
-        const auto storageIterator = component_storages_.find(typeKey);
+        const std::type_index type_key(typeid(Component));
+        const auto storage_iterator = component_storages_.find(type_key);
 
-        if (storageIterator == component_storages_.end()) {
+        if (storage_iterator == component_storages_.end()) {
             return nullptr;
         }
 
-        return static_cast<const ComponentStorage<Component>*>(storageIterator->second.get());
+        return static_cast<const ComponentStorage<Component>*>(storage_iterator->second.get());
     }
 
     void ValidateAliveEntity(Entity entity) const
@@ -226,15 +220,9 @@ public:
         }
     }
 
-    template <typename Function>
-    void each(Function&& function)
-    {
-        Each(std::forward<Function>(function));
-    }
-
 private:
     template <typename>
-    static constexpr bool AlwaysFalse = false;
+    static constexpr bool kAlwaysFalse = false;
 
     using StorageTuple = std::tuple<ComponentStorage<Components>*...>;
     using DriverComponent = std::tuple_element_t<0U, std::tuple<Components...>>;
@@ -268,19 +256,19 @@ private:
         InvokeWithComponents(function, entity, std::index_sequence_for<Components...>{});
     }
 
-    template <typename Function, std::size_t... ComponentIndices>
-    void InvokeWithComponents(Function& function, Entity entity, std::index_sequence<ComponentIndices...>)
+    template <typename Function, std::size_t... component_indices>
+    void InvokeWithComponents(Function& function, Entity entity, std::index_sequence<component_indices...>)
     {
         if constexpr (std::is_invocable_v<Function&, Entity, Components&...>) {
-            std::invoke(function, entity, (*std::get<ComponentIndices>(storages_)->TryGet(entity))...);
+            std::invoke(function, entity, (*std::get<component_indices>(storages_)->TryGet(entity))...);
         } else if constexpr (std::is_invocable_v<Function&, Components&...>) {
-            std::invoke(function, (*std::get<ComponentIndices>(storages_)->TryGet(entity))...);
+            std::invoke(function, (*std::get<component_indices>(storages_)->TryGet(entity))...);
         } else {
-            static_assert(AlwaysFalse<Function>, "View callback must accept (Entity, Components&...) or (Components&...)");
+            static_assert(kAlwaysFalse<Function>, "View callback must accept (Entity, Components&...) or (Components&...)");
         }
     }
 
     StorageTuple storages_;
 };
 
-} // namespace Engine::ECS
+} // namespace engine::ecs
