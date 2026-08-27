@@ -25,17 +25,23 @@ class Registry {
   Registry() = default;
 
   [[nodiscard]] Entity Create() {
-    Entity entity(next_entity_id_++);
+    Entity::IdType entity_id;
 
-    const std::size_t required_size =
-        static_cast<std::size_t>(entity.Value()) + 1U;
-    if (required_size > alive_entities_.size()) {
+    if (!free_entity_ids_.empty()) {
+      entity_id = free_entity_ids_.back();
+      free_entity_ids_.pop_back();
+    } else {
+      entity_id = next_entity_id_++;
+      const std::size_t required_size =
+          static_cast<std::size_t>(entity_id) + 1U;
       alive_entities_.resize(required_size, std::uint8_t{0});
+      generations_.resize(required_size, 0U);
     }
 
-    alive_entities_[entity.Value()] = std::uint8_t{1};
+    alive_entities_[entity_id] = std::uint8_t{1};
     ++living_entity_count_;
-    return entity;
+
+    return Entity(entity_id, generations_[entity_id]);
   }
 
   void Destroy(Entity entity) {
@@ -47,14 +53,19 @@ class Registry {
       storage_entry.second->Remove(entity);
     }
 
-    alive_entities_[entity.Value()] = std::uint8_t{0};
+    const Entity::IdType entity_id = entity.Value();
+
+    alive_entities_[entity_id] = std::uint8_t{0};
     --living_entity_count_;
+    ++generations_[entity_id];
+    free_entity_ids_.push_back(entity_id);
   }
 
   [[nodiscard]] bool IsAlive(Entity entity) const {
     const Entity::IdType entity_id = entity.Value();
     return entity.IsValid() && entity_id < alive_entities_.size() &&
-           alive_entities_[entity_id] != std::uint8_t{0};
+           alive_entities_[entity_id] != std::uint8_t{0} &&
+           entity.Generation() == generations_[entity_id];
   }
 
   [[nodiscard]] std::size_t EntityCount() const { return living_entity_count_; }
@@ -121,6 +132,10 @@ class Registry {
     alive_entities_.clear();
     living_entity_count_ = 0U;
     next_entity_id_ = 0U;
+    for (auto& generation : generations_) {
+      ++generation;
+    }
+    free_entity_ids_.clear();
   }
 
  private:
@@ -173,6 +188,8 @@ class Registry {
   Entity::IdType next_entity_id_ = 0U;
   std::size_t living_entity_count_ = 0U;
   std::vector<std::uint8_t> alive_entities_;
+  std::vector<Entity::GenerationType> generations_;
+  std::vector<Entity::IdType> free_entity_ids_;
   std::unordered_map<std::type_index, std::unique_ptr<IComponentStorage>>
       component_storages_;
 
