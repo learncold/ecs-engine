@@ -1,5 +1,6 @@
 {
   "[cpp]": {
+    "editor.autoIndent": "full",
     "editor.defaultFormatter": "ms-vscode.cpptools",
     "editor.detectIndentation": false,
     "editor.formatOnSave": true,
@@ -7,6 +8,7 @@
     "editor.insertSpaces": true,
     "editor.tabSize": 2
   },
+  "C_Cpp.formatting": "clangFormat",
   "C_Cpp.clang_format_fallbackStyle": "Google",
   "C_Cpp.clang_format_style": "file"
 }
