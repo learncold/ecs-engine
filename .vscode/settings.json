@@ -1,14 +1,13 @@
 {
   "[cpp]": {
     "editor.autoIndent": "full",
-    "editor.defaultFormatter": "ms-vscode.cpptools",
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
     "editor.detectIndentation": false,
     "editor.formatOnSave": true,
     "editor.formatOnType": true,
     "editor.insertSpaces": true,
     "editor.tabSize": 2
   },
-  "C_Cpp.formatting": "clangFormat",
-  "C_Cpp.clang_format_fallbackStyle": "Google",
-  "C_Cpp.clang_format_style": "file"
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "clangd.path": "C:\\Program Files\\LLVM\\bin\\clangd.exe"
 }
