@@ -1,13 +1,12 @@
 #include "Engine/Core/application.h"
 
-int main()
-{
-    Engine::Application app;
+int main() {
+  Engine::Application app;
 
-    if (!app.Initialize()) {
-        return 1;
-    }
+  if (!app.Initialize()) {
+    return 1;
+  }
 
-    app.Run();
-    return 0;
+  app.Run();
+  return 0;
 }

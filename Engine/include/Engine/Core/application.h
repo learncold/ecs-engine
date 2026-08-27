@@ -5,20 +5,19 @@ struct GLFWwindow;
 namespace Engine {
 
 class Application {
-public:
-    Application();
-    ~Application();
+ public:
+  Application();
+  ~Application();
 
-    Application(const Application&) = delete;
-    Application& operator=(const Application&) = delete;
+  Application(const Application&) = delete;
+  Application& operator=(const Application&) = delete;
 
-    bool Initialize();
-    void Run();
-    void Shutdown();
+  bool Initialize();
+  void Run();
+  void Shutdown();
 
-private:
-    GLFWwindow* window_ = nullptr;
+ private:
+  GLFWwindow* window_ = nullptr;
 };
 
-} // namespace Engine
-
+}  // namespace Engine
