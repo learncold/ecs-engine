@@ -1,0 +1,40 @@
+name: 기능 구현
+description: 목표, 범위, 완료 기준이 명확한 기능 구현 이슈를 작성합니다.
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        구현 목적과 작업 경계를 분명히 작성해 주세요.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: 목표
+      description: 이 기능으로 달성하려는 결과를 설명해 주세요.
+      placeholder: 구현이 완료됐을 때 달성되어야 하는 결과를 작성해 주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: 범위
+      description: 이번 이슈에서 구현하거나 변경할 작업을 나열해 주세요.
+      placeholder: |
+        - 구현할 작업 1
+        - 구현할 작업 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: completion-criteria
+    attributes:
+      label: 완료 기준
+      description: 이 이슈를 완료로 판단할 수 있는 검증 가능한 조건을 나열해 주세요.
+      placeholder: |
+        - 검증 가능한 조건 1
+        - 검증 가능한 조건 2
+    validations:
+      required: true
