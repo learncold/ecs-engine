@@ -9,5 +9,8 @@
     "editor.tabSize": 2
   },
   "C_Cpp.intelliSenseEngine": "disabled",
+  "clangd.arguments": [
+    "--compile-commands-dir=build/clangd"
+  ],
   "clangd.path": "C:\\Program Files\\LLVM\\bin\\clangd.exe"
 }
