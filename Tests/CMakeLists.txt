@@ -25,3 +25,16 @@ target_link_libraries(EngineEcsTests
 
 configure_test_target(EngineEcsTests)
 gtest_discover_tests(EngineEcsTests)
+
+add_executable(SandboxBoidsTests
+    integration/movement_system_tests.cpp
+)
+
+target_link_libraries(SandboxBoidsTests
+    PRIVATE
+        Sandbox::BoidsECS
+        GTest::gtest_main
+)
+
+configure_test_target(SandboxBoidsTests)
+gtest_discover_tests(SandboxBoidsTests)
