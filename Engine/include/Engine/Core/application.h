@@ -1,11 +1,15 @@
 #pragma once
 
+#include <functional>
+
 struct GLFWwindow;
 
 namespace Engine {
 
 class Application {
  public:
+  using UpdateCallback = std::function<void(float)>;
+
   Application();
   ~Application();
 
@@ -13,7 +17,7 @@ class Application {
   Application& operator=(const Application&) = delete;
 
   bool Initialize();
-  void Run();
+  void Run(const UpdateCallback& update_callback);
   void Shutdown();
 
  private:

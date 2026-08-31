@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
 
+#include <chrono>
 #include <iostream>
 
 namespace Engine {
@@ -29,7 +30,7 @@ bool Application::Initialize() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-  window_ = glfwCreateWindow(1280, 720, "ECS Engine Sandbox", nullptr, nullptr);
+  window_ = glfwCreateWindow(1280, 720, "ECS Engine", nullptr, nullptr);
   if (window_ == nullptr) {
     std::cerr << "Failed to create GLFW window\n";
     glfwTerminate();
@@ -49,13 +50,22 @@ bool Application::Initialize() {
   return true;
 }
 
-void Application::Run() {
+void Application::Run(const UpdateCallback& update_callback) {
+  auto previous_time = std::chrono::steady_clock::now();
+
   while (!glfwWindowShouldClose(window_)) {
+    const auto current_time = std::chrono::steady_clock::now();
+    const float delta_seconds =
+        std::chrono::duration<float>(current_time - previous_time).count();
+    previous_time = current_time;
+
     if (glfwGetKey(window_, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
       glfwSetWindowShouldClose(window_, GLFW_TRUE);
     }
 
-    glClearColor(0.08F, 0.09F, 0.10F, 1.0F);
+    update_callback(delta_seconds);
+
+    glClearColor(1.0F, 1.0F, 1.0F, 1.0F);
     glClear(GL_COLOR_BUFFER_BIT);
 
     glfwSwapBuffers(window_);
