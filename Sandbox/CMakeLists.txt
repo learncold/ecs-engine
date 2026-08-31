@@ -18,7 +18,9 @@ add_library(SandboxBoidsECS STATIC
     include/Sandbox/Boids/ECS/Components/transform.h
     include/Sandbox/Boids/ECS/Components/velocity.h
     include/Sandbox/Boids/ECS/Systems/movement_system.h
+    include/Sandbox/Boids/ECS/Systems/boid_system.h
     src/Boids/ECS/Systems/movement_system.cpp
+    src/Boids/ECS/Systems/boid_system.cpp
 )
 
 add_library(Sandbox::BoidsECS ALIAS SandboxBoidsECS)

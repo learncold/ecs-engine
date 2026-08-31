@@ -27,6 +27,7 @@ configure_test_target(EngineEcsTests)
 gtest_discover_tests(EngineEcsTests)
 
 add_executable(SandboxBoidsTests
+    integration/boid_system_tests.cpp
     integration/movement_system_tests.cpp
 )
 
