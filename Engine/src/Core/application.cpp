@@ -50,7 +50,8 @@ bool Application::Initialize() {
   return true;
 }
 
-void Application::Run(const UpdateCallback& update_callback) {
+void Application::Run(const UpdateCallback& update_callback,
+                      const RenderCallback& render_callback) {
   auto previous_time = std::chrono::steady_clock::now();
 
   while (!glfwWindowShouldClose(window_)) {
@@ -65,8 +66,16 @@ void Application::Run(const UpdateCallback& update_callback) {
 
     update_callback(delta_seconds);
 
+    int framebuffer_width = 0;
+    int framebuffer_height = 0;
+    glfwGetFramebufferSize(window_, &framebuffer_width, &framebuffer_height);
+
     glClearColor(1.0F, 1.0F, 1.0F, 1.0F);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    if (framebuffer_width > 0 && framebuffer_height > 0) {
+      render_callback(framebuffer_width, framebuffer_height);
+    }
 
     glfwSwapBuffers(window_);
     glfwPollEvents();

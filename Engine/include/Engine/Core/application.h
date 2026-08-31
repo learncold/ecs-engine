@@ -9,6 +9,7 @@ namespace Engine {
 class Application {
  public:
   using UpdateCallback = std::function<void(float)>;
+  using RenderCallback = std::function<void(int, int)>;
 
   Application();
   ~Application();
@@ -17,7 +18,8 @@ class Application {
   Application& operator=(const Application&) = delete;
 
   bool Initialize();
-  void Run(const UpdateCallback& update_callback);
+  void Run(const UpdateCallback& update_callback,
+           const RenderCallback& render_callback);
   void Shutdown();
 
  private:

@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
 
 #include "Engine/ECS/registry.h"
@@ -30,7 +31,9 @@ Boid MakeBoid(float separation_weight = 0.0F,
               .separation_weight = separation_weight,
               .alignment_weight = alignment_weight,
               .cohesion_weight = cohesion_weight,
-              .max_speed = 10.0F};
+              .preferred_speed = 3.0F,
+              .max_speed = 10.0F,
+              .max_force = 10.0F};
 }
 
 class BoidSystemTest : public testing::Test {
@@ -88,7 +91,35 @@ TEST_F(BoidSystemTest, CalculatesAlignmentTowardNeighborVelocity) {
 
   boid_system_.Update(registry_, 1.0F);
 
-  ExpectVec3Near(registry_.Get<Acceleration>(self).value, {-1.0F, 2.0F, 0.0F});
+  ExpectVec3Near(registry_.Get<Acceleration>(self).value, {-1.0F, 3.0F, 0.0F});
+}
+
+TEST_F(BoidSystemTest, LimitsAlignmentSteeringForce) {
+  Boid boid = MakeBoid(0.0F, 1.0F);
+  boid.max_force = 1.0F;
+  const engine::ecs::Entity self =
+      AddBoid({0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}, boid);
+  AddBoid({1.0F, 0.0F, 0.0F}, {0.0F, 2.0F, 0.0F}, boid);
+
+  boid_system_.Update(registry_, 1.0F);
+
+  const glm::vec3 alignment = registry_.Get<Acceleration>(self).value;
+  EXPECT_NEAR(glm::length(alignment), 1.0F, kTolerance);
+  EXPECT_LT(alignment.x, 0.0F);
+  EXPECT_GT(alignment.y, 0.0F);
+}
+
+TEST_F(BoidSystemTest, DoesNotBrakeWhenNeighborVelocitiesCancelOut) {
+  const Boid boid = MakeBoid(0.0F, 1.0F);
+  const engine::ecs::Entity self =
+      AddBoid({0.0F, 0.0F, 0.0F}, {2.0F, 0.0F, 0.0F}, boid);
+  AddBoid({1.0F, 0.0F, 0.0F}, {0.0F, 2.0F, 0.0F}, boid);
+  AddBoid({-1.0F, 0.0F, 0.0F}, {0.0F, -2.0F, 0.0F}, boid);
+
+  boid_system_.Update(registry_, 1.0F);
+
+  ExpectVec3Near(registry_.Get<Acceleration>(self).value,
+                 {0.0F, 0.0F, 0.0F});
 }
 
 TEST_F(BoidSystemTest, CalculatesCohesionTowardNeighborPosition) {
@@ -114,7 +145,7 @@ TEST_F(BoidSystemTest, AvoidsNonFiniteAccelerationForOverlappingBoids) {
   EXPECT_TRUE(std::isfinite(acceleration.x));
   EXPECT_TRUE(std::isfinite(acceleration.y));
   EXPECT_TRUE(std::isfinite(acceleration.z));
-  ExpectVec3Near(acceleration, {0.0F, 0.0F, 0.0F});
+  ExpectVec3Near(acceleration, {2.0F, 0.0F, 0.0F});
 }
 
 TEST(BoidMovementPipelineTest, LimitsSpeedBeforeUpdatingPosition) {

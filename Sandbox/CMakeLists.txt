@@ -42,6 +42,26 @@ target_link_libraries(SandboxBoidsECS
 
 configure_sandbox_target(SandboxBoidsECS)
 
+add_library(SandboxBoidsRenderer STATIC
+    include/Sandbox/Boids/Rendering/boid_renderer.h
+    src/Boids/Rendering/boid_renderer.cpp
+)
+
+add_library(Sandbox::BoidsRenderer ALIAS SandboxBoidsRenderer)
+
+target_include_directories(SandboxBoidsRenderer
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(SandboxBoidsRenderer
+    PUBLIC
+        Engine::Renderer
+        Sandbox::BoidsECS
+)
+
+configure_sandbox_target(SandboxBoidsRenderer)
+
 add_executable(Sandbox
     src/main.cpp
 )
@@ -50,6 +70,7 @@ target_link_libraries(Sandbox
     PRIVATE
         Engine::Core
         Sandbox::BoidsECS
+        Sandbox::BoidsRenderer
 )
 
 configure_sandbox_target(Sandbox)

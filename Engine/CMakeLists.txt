@@ -28,6 +28,24 @@ target_link_libraries(EngineCore
 
 configure_engine_target(EngineCore)
 
+add_library(EngineRenderer STATIC
+    src/Renderer/agent_renderer.cpp
+    src/Renderer/camera.cpp
+    src/Renderer/line_renderer.cpp
+)
+
+add_library(Engine::Renderer ALIAS EngineRenderer)
+
+target_link_libraries(EngineRenderer
+    PUBLIC
+        glm::glm
+    PRIVATE
+        glad
+        OpenGL::GL
+)
+
+configure_engine_target(EngineRenderer)
+
 add_library(EngineECS STATIC
     src/ECS/registry.cpp
     src/ECS/system.cpp
