@@ -15,10 +15,14 @@ function(configure_sandbox_target target_name)
 endfunction()
 
 add_library(SandboxBoidsECS STATIC
+    include/Sandbox/Boids/ECS/boid_simulation.h
     include/Sandbox/Boids/ECS/Components/transform.h
     include/Sandbox/Boids/ECS/Components/velocity.h
+    include/Sandbox/Boids/ECS/Systems/boundary_system.h
     include/Sandbox/Boids/ECS/Systems/movement_system.h
     include/Sandbox/Boids/ECS/Systems/boid_system.h
+    src/Boids/ECS/boid_simulation.cpp
+    src/Boids/ECS/Systems/boundary_system.cpp
     src/Boids/ECS/Systems/movement_system.cpp
     src/Boids/ECS/Systems/boid_system.cpp
 )

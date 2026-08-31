@@ -23,7 +23,7 @@
 6. 성능 측정값을 기록한다.
 7. 종료할 때까지 위 과정을 반복한다.
 
-현재는 창과 OpenGL Context를 초기화하고 화면을 지우는 기본 루프까지 구현되어 있다. 시뮬레이션, 렌더링, 성능 측정은 각 기능이 구현되는 순서에 맞춰 연결한다.
+현재는 창과 OpenGL Context를 초기화한 뒤 프레임별 `delta_seconds`를 Sandbox 업데이트 콜백에 전달한다. Sandbox의 `BoidSimulation`은 고정된 seed로 ECS Boid를 생성하고 `BoidSystem`, `MovementSystem`, `BoundarySystem` 순서로 갱신한다. 렌더링과 성능 측정은 이후 기능이 구현되는 순서에 맞춰 연결한다.
 
 ## 엔진의 책임
 
