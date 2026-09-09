@@ -48,13 +48,15 @@ cmake --preset vs2022
 cmake --build --preset vs2022-debug
 ```
 
-The sandbox executable is generated at:
+The application executable is generated at:
 
 ```text
-build/vs2022/Sandbox/Debug/Sandbox.exe
+build/vs2022/App/Debug/App.exe
 ```
 
 Visual Studio 2026 presets are available, but `vs2022` is the default verification path unless there is a specific reason to use another preset.
+
+The editor uses clangd with `build/clangd/compile_commands.json`, separately from the VS2022 build. After moving source/header files or changing CMake source lists, include paths, or dependencies, run `cmake --preset clangd` as well to refresh editor diagnostics.
 
 ## Project Structure
 
@@ -73,12 +75,21 @@ ECS-engine/
 │  └─ 제출용_붙임3_신청서.pdf
 ├─ Engine/
 │  ├─ CMakeLists.txt
-│  ├─ include/
-│  │  └─ Engine/
-│  └─ src/
-├─ Sandbox/
+│  ├─ Core/
+│  ├─ ECS/
+│  ├─ ECSRenderer/
+│  ├─ Renderer/
+│  ├─ Input/
+│  └─ DebugUI/
+├─ Boids/
 │  ├─ CMakeLists.txt
-│  └─ src/
+│  ├─ Common/
+│  ├─ ECS/
+│  └─ OOP/
+├─ App/
+│  ├─ CMakeLists.txt
+│  ├─ main.cpp
+│  └─ UI/
 └─ third_party/
    └─ glad/
 ```
@@ -87,7 +98,13 @@ ECS-engine/
 
 `Engine/` contains reusable runtime code. Put ECS infrastructure, renderer code, input handling, time management, scene/world code, and benchmark support here. Keep research-demo-specific Boids behavior out of this directory.
 
-`Sandbox/` contains executable demos and experiments that use `Engine`. Keep the Boids research demo and its OOP/ECS implementations here. The OOP implementation must not depend on `Engine/ECS`; only the ECS implementation uses that module. Shared initial conditions, parameters, and render data may be placed in a common Boids area.
+`Boids/` contains the research domain and its OOP/ECS implementations. The OOP implementation must not depend on `Engine/ECS`; only the ECS implementation uses that module. Shared initial conditions and parameters may be placed in the common Boids namespace.
+
+`Boids/Common/` provides shared configuration and `boids::BoidParameters` through the header-only `Boids::Common` target, without Engine or ECS dependencies. `Boids/ECS/` contains the ECS implementation; `Boids/OOP/` is reserved for the future OOP implementation. `max_alignment_force` limits alignment steering before weighting, not total acceleration.
+
+In `Engine/`, `Boids/`, and `App/`, keep related `.h` and `.cpp` files together in feature directories; do not add mirrored `include/` and `src/` trees. CMake targets use the project root as an include search path to preserve module-qualified includes such as `Engine/Core/application.h` and `Boids/Common/boid_parameters.h`. Keep the existing module dependency boundaries even though headers are visible through this shared search path. Tests and third-party code retain their separate layouts.
+
+`App/` is the thin executable composition layer. It may connect Engine and Boids callbacks and own App-specific UI, but must not implement ECS queries, model-matrix construction, OpenGL rendering, or Boids systems.
 
 `third_party/glad/` contains vendored GLAD source generated for OpenGL loading. Do not replace it casually. If GLAD is regenerated, document the OpenGL API/profile used.
 
@@ -115,13 +132,15 @@ Keep the project centered on a lightweight runtime, not a full editor or asset p
 ```text
 Engine.Core
 Engine.ECS
+Engine.ECSRenderer
 Engine.Renderer
 Engine.Input
-Engine.Scene
 Engine.Benchmark
 ```
 
-The runtime should support the research demo with the least unnecessary surface area. Boids-specific simulation code belongs in `Sandbox`, not in a general engine simulation module.
+The runtime should support the research demo with the least unnecessary surface area. Boids-specific simulation code belongs in `Boids`, not in a general engine simulation module.
+
+Transform, MeshRenderer, MeshKind, and transform functions live in `Engine/Renderer/` under `engine::renderer`; there is no separate Scene folder or namespace. Keep CPU-only transform code in the GLM-only `Engine::RenderData` CMake target, used by Boids and Renderer, so simulation code does not acquire OpenGL dependencies.
 
 ## ECS Design Rules
 

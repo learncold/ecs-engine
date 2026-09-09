@@ -26,17 +26,45 @@ target_link_libraries(EngineEcsTests
 configure_test_target(EngineEcsTests)
 gtest_discover_tests(EngineEcsTests)
 
-add_executable(SandboxBoidsTests
+add_executable(EngineRenderDataTests
+    unit/transform_tests.cpp
+)
+
+target_link_libraries(EngineRenderDataTests
+    PRIVATE
+        Engine::RenderData
+        GTest::gtest_main
+)
+
+configure_test_target(EngineRenderDataTests)
+gtest_discover_tests(EngineRenderDataTests)
+
+add_executable(EngineRenderingTests
+    unit/ecs_render_system_tests.cpp
+    unit/orbit_camera_controller_tests.cpp
+)
+
+target_link_libraries(EngineRenderingTests
+    PRIVATE
+        Engine::ECSRenderer
+        GTest::gtest_main
+)
+
+configure_test_target(EngineRenderingTests)
+gtest_discover_tests(EngineRenderingTests)
+
+add_executable(BoidsEcsTests
+    integration/boid_orientation_system_tests.cpp
     integration/boid_system_tests.cpp
     integration/boid_simulation_tests.cpp
     integration/movement_system_tests.cpp
 )
 
-target_link_libraries(SandboxBoidsTests
+target_link_libraries(BoidsEcsTests
     PRIVATE
-        Sandbox::BoidsECS
+        Boids::ECS
         GTest::gtest_main
 )
 
-configure_test_target(SandboxBoidsTests)
-gtest_discover_tests(SandboxBoidsTests)
+configure_test_target(BoidsEcsTests)
+gtest_discover_tests(BoidsEcsTests)

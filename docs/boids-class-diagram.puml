@@ -1,0 +1,183 @@
+@startuml Boids_Class_Diagram
+
+title Boids Class Diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam ArrowColor #59636E
+skinparam ClassBorderColor #44546A
+skinparam ClassBackgroundColor #FFF9F0
+skinparam PackageBorderColor #9A7440
+skinparam PackageBackgroundColor #FFF3DF
+
+hide empty members
+
+package "Engine dependencies" #EEF3F8 {
+  abstract class "engine::ecs::System" as EngineSystem {
+    + {abstract} Update(registry, delta_seconds) : void
+  }
+
+  class "engine::ecs::SystemManager" as SystemManager {
+    + Add<SystemType>(args...) : SystemType&
+    + Update(registry, delta_seconds) : void
+  }
+
+  class "engine::ecs::Registry" as Registry {
+    + Create() : Entity
+    + Emplace<Component>(entity, args...) : Component&
+    + CreateView<Components...>() : View
+    + Clear() : void
+  }
+
+  class "engine::ecs::Entity" as Entity <<value>>
+
+  class "engine::renderer::Transform" as Transform <<component>> {
+    + position : glm::vec3
+    + rotation : glm::quat
+    + scale : float
+  }
+
+  class "engine::renderer::MeshRenderer" as MeshRenderer <<component>> {
+    + mesh : MeshKind
+  }
+
+  class "engine::renderer free functions" as TransformFunctions <<utility>> {
+    + {static} RotationFromDirection(direction) : glm::quat
+  }
+}
+
+package "Boids/Common (boids)" {
+  class "boids::BoidSimulationConfig" as BoidSimulationConfig <<data>> {
+    + boid_count : size_t
+    + random_seed : uint32_t
+    + spawn_half_extent : float
+    + boundary_half_extent : float
+    + initial_speed : float
+    + parameters : BoidParameters
+  }
+
+  class "boids::BoidParameters" as BoidParameters <<shared data / ECS component>> {
+    + neighbor_radius : float
+    + separation_radius : float
+    + separation_weight : float
+    + alignment_weight : float
+    + cohesion_weight : float
+    + preferred_speed : float
+    + max_speed : float
+    + max_alignment_force : float
+  }
+
+}
+
+package "Boids/ECS components (boids::ecs)" {
+  class "boids::ecs::Velocity" as Velocity <<component>> {
+    + value : glm::vec3
+  }
+
+  class "boids::ecs::Acceleration" as Acceleration <<component>> {
+    + value : glm::vec3
+  }
+}
+
+package "boids::ecs::systems" {
+  class "boids::ecs::BoidSystem" as BoidSystem {
+    + Update(registry, delta_seconds) : void
+    --
+    - CalculateAcceleration(registry, self, transform, velocity, parameters) : glm::vec3
+  }
+
+  class "boids::ecs::MovementSystem" as MovementSystem {
+    + Update(registry, delta_seconds) : void
+  }
+
+  class "boids::ecs::BoundarySystem" as BoundarySystem {
+    + BoundarySystem(half_extent : float)
+    + Update(registry, delta_seconds) : void
+    --
+    - half_extent_ : float
+  }
+
+  class "boids::ecs::BoidOrientationSystem" as BoidOrientationSystem {
+    + Update(registry, delta_seconds) : void
+  }
+}
+
+package "boids::ecs::simulation" {
+  class "boids::ecs::BoidSimulation" as BoidSimulation {
+    + BoidSimulation(config : BoidSimulationConfig = {})
+    + Initialize() : void
+    + Update(delta_seconds : float) : void
+    + GetRegistry() : Registry&
+    --
+    - config_ : BoidSimulationConfig
+    - registry_ : Registry
+    - system_manager_ : SystemManager
+  }
+}
+
+' Configuration and simulation ownership
+BoidSimulationConfig *-- BoidParameters : default rule parameters
+BoidSimulation *-- BoidSimulationConfig : owns copy
+BoidSimulation *-- Registry : owns world data
+BoidSimulation *-- SystemManager : owns update pipeline
+BoidSimulation ..> Entity : creates
+
+' Systems are registered into the SystemManager in this order.
+BoidSimulation ..> BoidSystem : registers 1
+BoidSimulation ..> MovementSystem : registers 2
+BoidSimulation ..> BoundarySystem : registers 3
+BoidSimulation ..> BoidOrientationSystem : registers 4
+SystemManager *-- "0..*" EngineSystem : owns ordered systems
+
+' Engine system inheritance
+BoidSystem --|> EngineSystem
+MovementSystem --|> EngineSystem
+BoundarySystem --|> EngineSystem
+BoidOrientationSystem --|> EngineSystem
+
+' Initialization creates a complete renderable boid entity.
+BoidSimulation ..> Transform : emplaces
+BoidSimulation ..> MeshRenderer : emplaces
+BoidSimulation ..> Velocity : emplaces
+BoidSimulation ..> Acceleration : emplaces
+BoidSimulation ..> BoidParameters : emplaces
+BoidSimulation ..> TransformFunctions : initial rotation
+
+' Component access by each system
+BoidSystem ..> Transform : reads positions
+BoidSystem ..> Velocity : reads velocities
+BoidSystem ..> BoidParameters : reads rules
+BoidSystem ..> Acceleration : writes steering
+
+MovementSystem ..> Acceleration : reads
+MovementSystem ..> BoidParameters : reads max speed
+MovementSystem ..> Velocity : updates
+MovementSystem ..> Transform : updates position
+
+BoundarySystem ..> Transform : clamps position
+BoundarySystem ..> Velocity : reflects velocity
+
+BoidOrientationSystem ..> BoidParameters : selects boid entities
+BoidOrientationSystem ..> Velocity : reads final direction
+BoidOrientationSystem ..> Transform : writes rotation
+BoidOrientationSystem ..> TransformFunctions : converts direction
+
+note right of BoidSimulation
+  App sees only the simulation facade and its Registry.
+  System registration and execution order stay inside Boids.
+end note
+
+note bottom of Transform
+  Transform and MeshRenderer are Engine components.
+  Boids reuses them instead of defining render state itself.
+end note
+
+note bottom of BoidOrientationSystem
+  Runs after BoundarySystem so the rendered local +Z axis
+  follows the final, possibly reflected Velocity.
+end note
+
+@enduml

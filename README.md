@@ -67,7 +67,18 @@ cmake --preset vs2026
 cmake --build --preset vs2026-debug
 ```
 
-빌드 후 실행 파일은 `build/<preset>/Sandbox/Debug/Sandbox.exe` 아래에 생성됩니다.
+빌드 후 실행 파일은 `build/<preset>/App/Debug/App.exe` 아래에 생성됩니다.
+
+VS Code의 clangd는 별도의 컴파일 정보인 `build/clangd/compile_commands.json`을
+사용합니다. 파일을 이동하거나 CMake의 소스 목록·헤더 경로·의존성을 변경했다면
+다음 명령으로 편집기 정보도 갱신합니다.
+
+```powershell
+cmake --preset clangd
+```
+
+갱신 후에도 이전 오류 표시가 남으면 명령 팔레트에서
+`clangd: Restart language server`를 실행합니다.
 
 ## Project Layout
 
@@ -82,7 +93,33 @@ ECS-engine/
 │  ├─ research-goals.md
 │  └─ architecture.md
 ├─ Engine/
-├─ Sandbox/
+│  ├─ Core/
+│  ├─ ECS/
+│  ├─ ECSRenderer/
+│  ├─ Renderer/
+│  ├─ Input/
+│  └─ DebugUI/
+├─ Boids/
+│  ├─ Common/
+│  ├─ ECS/
+│  └─ OOP/
+├─ App/
+│  ├─ main.cpp
+│  └─ UI/
+├─ Tests/
 └─ third_party/
    └─ glad/
 ```
+
+`Engine`은 공통 런타임·Renderer·ECS를 제공하고, `Boids`는 연구 도메인의
+ECS 시뮬레이션만 포함합니다. `App`은 두 모듈을 조립해 실행하는 얇은 계층입니다.
+렌더링은 ECS와 무관한 `RenderInstance` 배열을 입력으로 받으므로 향후 OOP 구현도
+같은 Renderer를 공유할 수 있습니다.
+
+`Boids/Common`은 공통 설정과 `BoidParameters`를 제공하고, `Boids/ECS`는 현재
+시뮬레이션을 구현합니다. `Boids/OOP`는 향후 OOP 구현을 추가할 위치입니다.
+
+Engine·Boids·App은 기능별 폴더에 `.h`와 `.cpp`를 함께 배치합니다.
+예를 들어 `Engine/Core/application.h`와 `Engine/Core/application.cpp`가 한 폴더에
+있습니다. CMake의 헤더 검색 경로는 프로젝트 루트이므로
+`#include "Engine/Core/application.h"`처럼 모듈 이름을 포함해 사용합니다.

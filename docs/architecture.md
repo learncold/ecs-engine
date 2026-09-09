@@ -2,66 +2,97 @@
 
 ## 개요
 
-이 프로젝트는 ECS 기반 3D Boids 시뮬레이션을 실행하고 성능을 비교하기 위한 경량 런타임이다. 범용 게임 엔진을 목표로 하지 않으며, 시뮬레이션 실행·시각화·성능 측정에 필요한 부분만 구현한다.
+이 프로젝트는 ECS 기반 3D Boids 시뮬레이션과 OOP 기준 구현의 성능을 비교하기
+위한 경량 런타임이다. 구현은 책임에 따라 `Engine`, `Boids`, `App`으로 나뉜다.
 
-코드는 크게 두 영역으로 나뉜다.
+- `Engine`: 재사용 가능한 실행, 입력, ECS, 렌더링 데이터와 렌더링 기능
+- `Boids`: Boids 규칙과 ECS 시뮬레이션
+- `App`: Engine과 Boids를 생성하고 콜백으로 연결하는 실행 계층
 
-- `Engine`은 재사용 가능한 공통 런타임과 선택적인 ECS 기반 코드를 포함한다.
-- `Sandbox`는 엔진 위에서 실행되는 Boids 데모와 성능 실험을 포함한다.
+의존 방향은 `App → Engine`, `App → Boids`, `Boids → Engine`이다. `Engine`은
+Boids나 App을 알지 못하며 Boids는 App에 의존하지 않는다.
 
-외부 라이브러리도 최소한으로 사용한다. GLFW는 창과 입력을 처리하고, GLAD는 OpenGL 함수를 로드하며, OpenGL은 시뮬레이션을 화면에 표시한다.
+Engine, Boids, App은 기능별 폴더에 헤더와 구현 파일을 함께 둔다. 예를 들어
+`Engine/Core/application.h`와 `application.cpp`, `App/UI/performance_panel.h`와
+`performance_panel.cpp`가 각각 같은 폴더에 있다. 별도 `include/`, `src/` 트리는
+사용하지 않는다. Tests와 third_party는 기존 구조를 유지한다.
+
+CMake 타깃은 프로젝트 루트를 헤더 검색 경로로 사용하므로
+`#include "Engine/Core/application.h"` 같은 모듈 경로를 유지한다.
+헤더 검색 경로가 공유되어도 위의 모듈 의존 방향과 타깃 간 링크 관계는 유지한다.
 
 ## 실행 흐름
 
-애플리케이션은 일반적인 실시간 루프로 동작한다.
+1. App이 창과 OpenGL Context를 초기화한다.
+2. Boids ECS 시뮬레이션과 Engine 렌더러를 초기화한다.
+3. Engine Core가 입력과 프레임 시간을 수집한다.
+4. Boids가 `BoidSystem → MovementSystem → BoundarySystem →
+   BoidOrientationSystem` 순서로 시뮬레이션을 갱신한다.
+5. `Engine::ECSRenderer`가 `Transform + MeshRenderer` View에서
+   `RenderInstance` 배열을 추출한다.
+6. `AgentRenderManager`가 Transform을 Model 행렬로 변환하고 Grid, 경계선,
+   Agent를 렌더링한다.
+7. App의 PerformancePanel이 Boid 수, FPS, 프레임 시간과 VSync를 표시한다.
 
-1. 창과 OpenGL Context를 초기화한다.
-2. 선택한 방식의 시뮬레이션을 초기화한다.
-3. 입력을 처리하고 프레임 시간을 계산한다.
-4. 선택한 방식의 시뮬레이션을 갱신한다.
-5. 에이전트를 렌더링한다.
-6. 성능 측정값을 기록한다.
-7. 종료할 때까지 위 과정을 반복한다.
-
-현재는 창과 OpenGL Context를 초기화한 뒤 프레임별 `delta_seconds`를 Sandbox 업데이트 콜백에 전달한다. Sandbox의 `BoidSimulation`은 고정된 seed로 ECS Boid를 생성하고 `BoidSystem`, `MovementSystem`, `BoundarySystem` 순서로 갱신한다. 렌더링과 성능 측정은 이후 기능이 구현되는 순서에 맞춰 연결한다.
-
-## 엔진의 책임
-
-엔진은 다음과 같은 작은 범위의 기능을 담당한다.
+## Engine 모듈
 
 - `Core`: 애플리케이션 수명과 메인 루프
-- `ECS`: ECS 방식에서 사용하는 Entity, Component 저장소, View, System 실행
-- `Renderer`: 두 시뮬레이션 방식이 공유하는 카메라와 인스턴스 렌더링
-- `Benchmark`: 두 방식에 동일하게 적용하는 성능 측정
+- `Input`: GLFW 입력을 엔진 입력 상태로 변환
+- `DebugUI`: Dear ImGui 백엔드 수명과 프레임 처리
+- `ECS`: Entity, Component 저장소, View, System 실행
+- `Renderer`: 공통 `Transform`, `MeshRenderer`, Model 행렬 변환, 카메라,
+  Orbit 조작, Grid/경계선, Instanced Agent 렌더링
+- `ECSRenderer`: ECS View를 공통 Renderer 입력으로 바꾸는 어댑터
+- `Benchmark`: 이후 추가할 공통 성능 측정 기능
 
-Boids 규칙과 실험 시나리오는 엔진의 범용 기능이 아니므로 `Sandbox`에 둔다. 위 이름은 책임을 구분하기 위한 것이며, 모든 항목을 반드시 독립된 계층이나 클래스로 만들 필요는 없다.
+`Transform`은 position, rotation quaternion, 균일 scale을 가진다. Model 행렬은
+`Translation × Rotation × Scale` 순서로 만든다. 렌더링 포함 여부는 별도 visible
+플래그가 아니라 `MeshRenderer` 컴포넌트의 존재 여부로 표현한다.
 
-## ECS 구조
+이 데이터와 함수는 `Engine/Renderer/`와 `engine::renderer` namespace에 둔다.
+별도 Scene 폴더나 namespace는 없다. 빌드에서는 GLM만 사용하는
+`Engine::RenderData` 타깃에 `transform.cpp`를 두고, `Engine::Renderer`와
+`Boids::ECS`가 이를 사용한다. 따라서 Boids는 Transform 계산을 위해
+OpenGL 렌더러에 의존할 필요가 없다.
 
-Entity는 가벼운 숫자 ID이고, Component는 데이터를 가지며, System은 동작을 담당한다.
+## ECS 렌더 경계
 
-같은 타입의 Component는 Sparse Set 기반 저장소에 모아 둔다. System은 다음과 같이 타입이 지정된 View를 통해 필요한 Entity만 순회한다.
+공통 Renderer는 Registry나 Boid 타입을 알지 못하고 다음 데이터만 받는다.
 
 ```cpp
-registry.CreateView<Transform, Velocity>().Each(
-    [](Transform& transform, Velocity& velocity) {
-        // 속도를 이용해 위치를 갱신한다.
-    });
+struct RenderInstance {
+  engine::renderer::Transform transform;
+  engine::renderer::MeshKind mesh;
+};
 ```
 
-이 구조는 시뮬레이션 코드가 저장소 내부 구현에 직접 의존하지 않게 하고, Component 데이터를 순차적으로 처리하기 쉽게 만든다. 초기 ECS는 단순한 저장 방식을 유지한다. Archetype이나 Job System은 첫 구현 범위에 포함하지 않는다.
+ECS 경로에서는 `EcsRenderSystem`이 Registry로부터 이 배열을 만든다. 향후 OOP
+경로에서는 객체 배열로부터 같은 `RenderInstance` 배열을 만들어
+`AgentRenderManager`를 직접 호출한다. 따라서 OOP 구현은 `Engine::ECS`에 의존할
+필요가 없다.
 
-## Boids 성능 비교
+## Boids 모듈
 
-Boids 데모는 같은 초기 조건을 사용하는 두 구현을 제공한다.
+`Boids/`는 다음 세 폴더로 나뉜다.
 
-- Boid 객체를 사용하는 OOP 기준 구현
-- Component와 System을 사용하는 ECS 구현
+- `Common/`: `boids::BoidParameters`와 `boids::BoidSimulationConfig` 공통 데이터.
+  헤더 전용 `Boids::Common` 타깃이며 Engine과 ECS 구현에 의존하지 않는다.
+- `ECS/`: `boids::ecs` namespace의 Component, System, 시뮬레이션.
+  `Boids::ECS` 타깃은 `Boids::Common`을 사용한다.
+- `OOP/`: 향후 OOP 비교 구현을 추가할 위치. 현재 구현과 빌드 타깃은 없다.
 
-두 방식은 같은 에이전트 수, 파라미터, 무작위 seed, 측정 조건을 사용해야 한다. 이웃 탐색은 먼저 모든 Boid를 비교하는 방식으로 구현한 뒤 3D Grid 방식을 추가한다. 렌더링 비용이 시뮬레이션 비교를 가리지 않도록 두 시간은 별도로 측정한다.
+공통 헤더는 `Boids/Common/`에, ECS 헤더와 소스는 `Boids/ECS/` 및 그 아래
+`Components/`, `Systems/`에 둔다. 공통 헤더는 `Boids/Common/...`으로 포함한다.
 
-OOP 구현은 일반 C++ 객체 배열을 사용하며 ECS 모듈에 의존하지 않는다. ECS 구현만 Registry와 Component Storage를 사용한다. 두 구현은 `Sandbox` 안에서 분리하고, 공통 초기 조건과 렌더 데이터 형식만 공유한다.
+`BoidParameters`는 개체 전체가 아닌 행동 매개변수 묶음이며, ECS에서는
+이 공통 타입을 그대로 컴포넌트로 저장한다. 설정의 `parameters` 멤버가 초기값을
+제공한다. `max_alignment_force`는 `alignment_weight`를 적용하기 전 정렬 조향력의
+크기만 제한하며, 분리·응집이나 최종 합산 가속도의 상한은 아니다.
 
-## 의존 방향
+Entity 생성 시 Engine의 Transform과 MeshRenderer를
+추가하고, 최종 Velocity가 바뀐 후 OrientationSystem이 local `+Z` 방향을 속도
+방향에 맞춘다.
 
-`Sandbox`는 필요한 엔진 모듈을 사용할 수 있지만, `Engine`은 데모 코드에 의존하지 않는다. OOP 시뮬레이션은 공통 런타임만 사용하고, ECS 시뮬레이션은 공통 런타임과 ECS 모듈을 사용한다. 시뮬레이션 코드는 OpenGL을 직접 호출하지 않고, 화면 출력은 렌더러가 담당한다. 구체적인 필요가 생기기 전에는 더 많은 계층을 추가하지 않는다.
+App에는 System 구현, Registry View 순회, Model 행렬 생성, OpenGL 호출을 두지
+않는다. Material 시스템, 범용 Mesh 로딩, Scene Graph와 OOP Boids 구현은 현재
+범위에 포함하지 않는다.

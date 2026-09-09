@@ -3,11 +3,15 @@
 #include <glm/vec3.hpp>
 
 #include "Engine/ECS/registry.h"
-#include "Sandbox/Boids/ECS/Components/transform.h"
-#include "Sandbox/Boids/ECS/Components/velocity.h"
-#include "Sandbox/Boids/ECS/Systems/movement_system.h"
+#include "Boids/ECS/Components/velocity.h"
+#include "Boids/ECS/Systems/movement_system.h"
+#include "Engine/Renderer/transform.h"
 
 namespace {
+
+using boids::ecs::MovementSystem;
+using boids::ecs::Velocity;
+using engine::renderer::Transform;
 
 void ExpectVec3Near(const glm::vec3& actual, const glm::vec3& expected) {
   constexpr float kTolerance = 0.000001F;
