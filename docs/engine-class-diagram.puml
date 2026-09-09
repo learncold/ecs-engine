@@ -1,0 +1,269 @@
+@startuml Engine_Class_Diagram
+
+title Engine Class Diagram
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam ArrowColor #59636E
+skinparam ClassBorderColor #44546A
+skinparam ClassBackgroundColor #F7F9FC
+skinparam PackageBorderColor #7A8795
+skinparam PackageBackgroundColor #EEF3F8
+
+hide empty members
+
+package "External" #F5F5F5 {
+  class GLFWwindow <<external>>
+}
+
+package "engine::core" {
+  class "engine::core::Application" as Application {
+    + Application()
+    + ~Application()
+    + Initialize() : bool
+    + Run(update, render, ui = {}) : void
+    + SetVSyncEnabled(enabled : bool) : void
+    + IsVSyncEnabled() : bool
+    + Shutdown() : void
+    --
+    - window_ : GLFWwindow*
+    - vsync_enabled_ : bool
+  }
+}
+
+package "engine::input" {
+  class "engine::input::InputState" as InputState <<data>> {
+    + move_forward : bool
+    + move_backward : bool
+    + move_left : bool
+    + move_right : bool
+    + move_up : bool
+    + move_down : bool
+    + reset_camera : bool
+    + orbit_button_down : bool
+    + mouse_delta_x : float
+    + mouse_delta_y : float
+    + scroll_delta : float
+  }
+
+  class "engine::input::Input" as Input {
+    + Initialize(window : GLFWwindow*) : void
+    + Update(keyboard_enabled, mouse_enabled) : void
+    + State() : const InputState&
+    + Shutdown() : void
+    --
+    - window_ : GLFWwindow*
+    - state_ : InputState
+    - pending_scroll_delta_ : float
+  }
+}
+
+package "engine::debug_ui" {
+  class "engine::debug_ui::DebugUi" as DebugUi {
+    + Initialize(window : GLFWwindow*) : bool
+    + BeginFrame() : void
+    + Render() : void
+    + WantsCaptureKeyboard() : bool
+    + WantsCaptureMouse() : bool
+    + Shutdown() : void
+    --
+    - initialized_ : bool
+  }
+}
+
+package "engine::ecs" {
+  class "engine::ecs::Entity" as Entity <<value>> {
+    + Value() : IdType
+    + Generation() : GenerationType
+    + IsValid() : bool
+    --
+    - value_ : IdType
+    - generation_ : GenerationType
+  }
+
+  abstract class "engine::ecs::IComponentStorage" as IComponentStorage {
+    + {abstract} Remove(entity : Entity) : void
+    + {abstract} Clear() : void
+  }
+
+  class "engine::ecs::ComponentStorage<Component>" as ComponentStorage <<template>> {
+    + Emplace(entity, args...) : Component&
+    + Remove(entity : Entity) : void
+    + Contains(entity : Entity) : bool
+    + Get(entity : Entity) : Component&
+    + TryGet(entity : Entity) : Component*
+    + Entities() : const vector<Entity>&
+    + Size() : size_t
+  }
+
+  class "engine::ecs::Registry" as Registry {
+    + Create() : Entity
+    + Destroy(entity : Entity) : void
+    + IsAlive(entity : Entity) : bool
+    + EntityCount() : size_t
+    + Emplace<Component>(entity, args...) : Component&
+    + Remove<Component>(entity) : void
+    + Has<Component>(entity) : bool
+    + Get<Component>(entity) : Component&
+    + CreateView<Components...>() : View
+    + Clear() : void
+  }
+
+  class "engine::ecs::View<Components...>" as View <<template>> {
+    + Each(function) : void
+  }
+
+  abstract class "engine::ecs::System" as System {
+    + {abstract} Update(registry : Registry&, delta_seconds : float) : void
+  }
+
+  class "engine::ecs::SystemManager" as SystemManager {
+    + Add<SystemType>(args...) : SystemType&
+    + Update(registry : Registry&, delta_seconds : float) : void
+    + Clear() : void
+    + Size() : size_t
+  }
+}
+
+package "engine::renderer" {
+  class "engine::renderer::Transform" as Transform <<component>> {
+    + position : glm::vec3
+    + rotation : glm::quat
+    + scale : float
+  }
+
+  enum "engine::renderer::MeshKind" as MeshKind {
+    Agent
+  }
+
+  class "engine::renderer::MeshRenderer" as MeshRenderer <<component>> {
+    + mesh : MeshKind
+  }
+
+  class "engine::renderer free functions" as TransformFunctions <<utility>> {
+    + {static} ToModelMatrix(transform : Transform) : glm::mat4
+    + {static} RotationFromDirection(direction : glm::vec3) : glm::quat
+  }
+
+  class "engine::renderer::RenderInstance" as RenderInstance <<data>> {
+    + transform : Transform
+    + mesh : MeshKind
+  }
+
+  class "engine::renderer::Camera" as Camera {
+    + ViewProjection(aspect_ratio : float) : glm::mat4
+    + Position() : const glm::vec3&
+    + Target() : const glm::vec3&
+    + SetPosition(position : glm::vec3) : void
+    + SetTarget(target : glm::vec3) : void
+  }
+
+  class "engine::renderer::OrbitCameraController" as OrbitCameraController {
+    + Update(camera, input, delta_seconds) : void
+    --
+    - target_ : glm::vec3
+    - distance_ : float
+    - yaw_ : float
+    - pitch_ : float
+  }
+
+  class "engine::renderer::LineVertex" as LineVertex <<data>> {
+    + position : glm::vec3
+    + color : glm::vec3
+  }
+
+  class "engine::renderer::LineRenderer" as LineRenderer {
+    + Initialize(vertices : span<LineVertex>) : bool
+    + Render(view_projection : glm::mat4) : void
+    + Shutdown() : void
+  }
+
+  class "engine::renderer::AgentRenderer" as AgentRenderer {
+    + Initialize() : bool
+    + Render(model_matrices, view_projection, camera_position) : void
+    + Shutdown() : void
+  }
+
+  class "engine::renderer::AgentRenderManager" as AgentRenderManager {
+    + Initialize() : bool
+    + UpdateCamera(input : InputState, delta_seconds : float) : void
+    + Render(instances : span<RenderInstance>, width : int, height : int) : void
+    --
+    - BuildEnvironmentLines(boundary_half_extent : float) : void
+    - model_matrices_ : vector<glm::mat4>
+    - environment_lines_ : vector<LineVertex>
+  }
+}
+
+package "engine::ecs_renderer" {
+  class "engine::ecs_renderer::EcsRenderSystem" as EcsRenderSystem {
+    + Extract(registry : Registry&) : void
+    + Render(registry, renderer, width, height) : void
+    + Instances() : span<RenderInstance>
+    --
+    - instances_ : vector<RenderInstance>
+  }
+}
+
+' Core ownership
+Application *-- Input : owns
+Application *-- DebugUi : owns
+Application --> GLFWwindow : owns handle
+Application ..> InputState : update callback
+Input *-- InputState : current state
+Input --> GLFWwindow : reads events
+DebugUi --> GLFWwindow : UI backend
+
+' Render data
+MeshRenderer --> MeshKind
+TransformFunctions ..> Transform
+
+' ECS internals
+ComponentStorage --|> IComponentStorage
+ComponentStorage o-- "0..*" Entity : dense entities
+Registry *-- "0..*" IComponentStorage : owns by component type
+Registry ..> Entity : creates and validates
+Registry ..> View : creates
+View --> ComponentStorage : iterates matching storage
+SystemManager *-- "0..*" System : owns ordered systems
+SystemManager ..> Registry : updates
+System ..> Registry : operates on
+
+' Common renderer
+RenderInstance *-- Transform
+RenderInstance --> MeshKind
+AgentRenderManager *-- AgentRenderer
+AgentRenderManager *-- LineRenderer
+AgentRenderManager *-- Camera
+AgentRenderManager *-- OrbitCameraController
+AgentRenderManager o-- "0..*" LineVertex : environment geometry
+AgentRenderManager ..> RenderInstance : consumes
+AgentRenderManager ..> TransformFunctions : builds model matrices
+AgentRenderManager ..> InputState : camera input
+OrbitCameraController --> Camera : updates
+OrbitCameraController ..> InputState : reads
+LineRenderer ..> LineVertex : uploads
+
+' ECS-to-renderer adapter
+EcsRenderSystem --> Registry : queries Transform + MeshRenderer
+EcsRenderSystem o-- "0..*" RenderInstance : reuses extraction buffer
+EcsRenderSystem --> AgentRenderManager : submits instances
+EcsRenderSystem ..> Transform
+EcsRenderSystem ..> MeshRenderer
+
+note right of EcsRenderSystem
+  ECS-specific adapter.
+  It is called explicitly during the render phase,
+  not registered in SystemManager.
+end note
+
+note bottom of AgentRenderManager
+  ECS-independent renderer.
+  A future OOP path can build the same
+  RenderInstance array and call Render directly.
+end note
+
+@enduml

@@ -1,19 +1,25 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
-
 #include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
 
+#include "Boids/Common/boid_parameters.h"
+#include "Boids/ECS/Components/acceleration.h"
+#include "Boids/ECS/Components/velocity.h"
+#include "Boids/ECS/Systems/boid_system.h"
+#include "Boids/ECS/Systems/movement_system.h"
 #include "Engine/ECS/registry.h"
-#include "Sandbox/Boids/ECS/Components/acceleration.h"
-#include "Sandbox/Boids/ECS/Components/boid.h"
-#include "Sandbox/Boids/ECS/Components/transform.h"
-#include "Sandbox/Boids/ECS/Components/velocity.h"
-#include "Sandbox/Boids/ECS/Systems/boid_system.h"
-#include "Sandbox/Boids/ECS/Systems/movement_system.h"
+#include "Engine/Renderer/transform.h"
 
 namespace {
+
+using boids::BoidParameters;
+using boids::ecs::Acceleration;
+using boids::ecs::BoidSystem;
+using boids::ecs::MovementSystem;
+using boids::ecs::Velocity;
+using engine::renderer::Transform;
 
 constexpr float kTolerance = 0.000001F;
 
@@ -23,28 +29,28 @@ void ExpectVec3Near(const glm::vec3& actual, const glm::vec3& expected) {
   EXPECT_NEAR(actual.z, expected.z, kTolerance);
 }
 
-Boid MakeBoid(float separation_weight = 0.0F,
-              float alignment_weight = 0.0F,
-              float cohesion_weight = 0.0F) {
-  return Boid{.neighbor_radius = 5.0F,
-              .separation_radius = 1.0F,
-              .separation_weight = separation_weight,
-              .alignment_weight = alignment_weight,
-              .cohesion_weight = cohesion_weight,
-              .preferred_speed = 3.0F,
-              .max_speed = 10.0F,
-              .max_force = 10.0F};
+BoidParameters MakeBoidParameters(float separation_weight = 0.0F,
+                                  float alignment_weight = 0.0F,
+                                  float cohesion_weight = 0.0F) {
+  return BoidParameters{.neighbor_radius = 5.0F,
+                        .separation_radius = 1.0F,
+                        .separation_weight = separation_weight,
+                        .alignment_weight = alignment_weight,
+                        .cohesion_weight = cohesion_weight,
+                        .preferred_speed = 3.0F,
+                        .max_speed = 10.0F,
+                        .max_alignment_force = 10.0F};
 }
 
 class BoidSystemTest : public testing::Test {
  protected:
   engine::ecs::Entity AddBoid(const glm::vec3& position,
                               const glm::vec3& velocity,
-                              const Boid& boid) {
+                              const BoidParameters& parameters) {
     const engine::ecs::Entity entity = registry_.Create();
     registry_.Emplace<Transform>(entity, Transform{.position = position});
     registry_.Emplace<Velocity>(entity, Velocity{.value = velocity});
-    registry_.Emplace<Boid>(entity, boid);
+    registry_.Emplace<BoidParameters>(entity, parameters);
     registry_.Emplace<Acceleration>(entity, Acceleration{});
     return entity;
   }
@@ -55,7 +61,8 @@ class BoidSystemTest : public testing::Test {
 
 TEST_F(BoidSystemTest, ProducesZeroAccelerationWithoutNeighbors) {
   const engine::ecs::Entity self =
-      AddBoid({0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}, MakeBoid(1.0F, 1.0F, 1.0F));
+      AddBoid({0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F},
+              MakeBoidParameters(1.0F, 1.0F, 1.0F));
 
   boid_system_.Update(registry_, 1.0F);
 
@@ -64,9 +71,10 @@ TEST_F(BoidSystemTest, ProducesZeroAccelerationWithoutNeighbors) {
 
 TEST_F(BoidSystemTest, IgnoresBoidsOutsideNeighborRadius) {
   const engine::ecs::Entity self =
-      AddBoid({0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}, MakeBoid(1.0F, 1.0F, 1.0F));
+      AddBoid({0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F},
+              MakeBoidParameters(1.0F, 1.0F, 1.0F));
   AddBoid({5.0F, 0.0F, 0.0F}, {0.0F, 2.0F, 0.0F},
-          MakeBoid(1.0F, 1.0F, 1.0F));
+          MakeBoidParameters(1.0F, 1.0F, 1.0F));
 
   boid_system_.Update(registry_, 1.0F);
 
@@ -75,8 +83,8 @@ TEST_F(BoidSystemTest, IgnoresBoidsOutsideNeighborRadius) {
 
 TEST_F(BoidSystemTest, CalculatesSeparationAwayFromNearbyBoid) {
   const engine::ecs::Entity self =
-      AddBoid({0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 0.0F}, MakeBoid(1.0F));
-  AddBoid({0.5F, 0.0F, 0.0F}, {0.0F, 0.0F, 0.0F}, MakeBoid(1.0F));
+      AddBoid({0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 0.0F}, MakeBoidParameters(1.0F));
+  AddBoid({0.5F, 0.0F, 0.0F}, {0.0F, 0.0F, 0.0F}, MakeBoidParameters(1.0F));
 
   boid_system_.Update(registry_, 1.0F);
 
@@ -84,10 +92,10 @@ TEST_F(BoidSystemTest, CalculatesSeparationAwayFromNearbyBoid) {
 }
 
 TEST_F(BoidSystemTest, CalculatesAlignmentTowardNeighborVelocity) {
-  const engine::ecs::Entity self =
-      AddBoid({0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}, MakeBoid(0.0F, 1.0F));
+  const engine::ecs::Entity self = AddBoid(
+      {0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}, MakeBoidParameters(0.0F, 1.0F));
   AddBoid({1.0F, 0.0F, 0.0F}, {0.0F, 2.0F, 0.0F},
-          MakeBoid(0.0F, 1.0F));
+          MakeBoidParameters(0.0F, 1.0F));
 
   boid_system_.Update(registry_, 1.0F);
 
@@ -95,11 +103,11 @@ TEST_F(BoidSystemTest, CalculatesAlignmentTowardNeighborVelocity) {
 }
 
 TEST_F(BoidSystemTest, LimitsAlignmentSteeringForce) {
-  Boid boid = MakeBoid(0.0F, 1.0F);
-  boid.max_force = 1.0F;
+  BoidParameters parameters = MakeBoidParameters(0.0F, 1.0F);
+  parameters.max_alignment_force = 1.0F;
   const engine::ecs::Entity self =
-      AddBoid({0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}, boid);
-  AddBoid({1.0F, 0.0F, 0.0F}, {0.0F, 2.0F, 0.0F}, boid);
+      AddBoid({0.0F, 0.0F, 0.0F}, {1.0F, 0.0F, 0.0F}, parameters);
+  AddBoid({1.0F, 0.0F, 0.0F}, {0.0F, 2.0F, 0.0F}, parameters);
 
   boid_system_.Update(registry_, 1.0F);
 
@@ -110,23 +118,23 @@ TEST_F(BoidSystemTest, LimitsAlignmentSteeringForce) {
 }
 
 TEST_F(BoidSystemTest, DoesNotBrakeWhenNeighborVelocitiesCancelOut) {
-  const Boid boid = MakeBoid(0.0F, 1.0F);
+  const BoidParameters parameters = MakeBoidParameters(0.0F, 1.0F);
   const engine::ecs::Entity self =
-      AddBoid({0.0F, 0.0F, 0.0F}, {2.0F, 0.0F, 0.0F}, boid);
-  AddBoid({1.0F, 0.0F, 0.0F}, {0.0F, 2.0F, 0.0F}, boid);
-  AddBoid({-1.0F, 0.0F, 0.0F}, {0.0F, -2.0F, 0.0F}, boid);
+      AddBoid({0.0F, 0.0F, 0.0F}, {2.0F, 0.0F, 0.0F}, parameters);
+  AddBoid({1.0F, 0.0F, 0.0F}, {0.0F, 2.0F, 0.0F}, parameters);
+  AddBoid({-1.0F, 0.0F, 0.0F}, {0.0F, -2.0F, 0.0F}, parameters);
 
   boid_system_.Update(registry_, 1.0F);
 
-  ExpectVec3Near(registry_.Get<Acceleration>(self).value,
-                 {0.0F, 0.0F, 0.0F});
+  ExpectVec3Near(registry_.Get<Acceleration>(self).value, {0.0F, 0.0F, 0.0F});
 }
 
 TEST_F(BoidSystemTest, CalculatesCohesionTowardNeighborPosition) {
   const engine::ecs::Entity self =
-      AddBoid({0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 0.0F}, MakeBoid(0.0F, 0.0F, 1.0F));
+      AddBoid({0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 0.0F},
+              MakeBoidParameters(0.0F, 0.0F, 1.0F));
   AddBoid({1.0F, 2.0F, 3.0F}, {0.0F, 0.0F, 0.0F},
-          MakeBoid(0.0F, 0.0F, 1.0F));
+          MakeBoidParameters(0.0F, 0.0F, 1.0F));
 
   boid_system_.Update(registry_, 1.0F);
 
@@ -135,9 +143,10 @@ TEST_F(BoidSystemTest, CalculatesCohesionTowardNeighborPosition) {
 
 TEST_F(BoidSystemTest, AvoidsNonFiniteAccelerationForOverlappingBoids) {
   const engine::ecs::Entity self =
-      AddBoid({1.0F, 2.0F, 3.0F}, {1.0F, 0.0F, 0.0F}, MakeBoid(1.0F, 1.0F, 1.0F));
+      AddBoid({1.0F, 2.0F, 3.0F}, {1.0F, 0.0F, 0.0F},
+              MakeBoidParameters(1.0F, 1.0F, 1.0F));
   AddBoid({1.0F, 2.0F, 3.0F}, {1.0F, 0.0F, 0.0F},
-          MakeBoid(1.0F, 1.0F, 1.0F));
+          MakeBoidParameters(1.0F, 1.0F, 1.0F));
 
   boid_system_.Update(registry_, 1.0F);
 
@@ -153,16 +162,15 @@ TEST(BoidMovementPipelineTest, LimitsSpeedBeforeUpdatingPosition) {
   const engine::ecs::Entity entity = registry.Create();
   registry.Emplace<Transform>(entity, Transform{});
   registry.Emplace<Velocity>(entity, Velocity{.value = {3.0F, 4.0F, 0.0F}});
-  registry.Emplace<Acceleration>(
-      entity, Acceleration{.value = {6.0F, 8.0F, 0.0F}});
-  registry.Emplace<Boid>(entity, MakeBoid());
+  registry.Emplace<Acceleration>(entity,
+                                 Acceleration{.value = {6.0F, 8.0F, 0.0F}});
+  registry.Emplace<BoidParameters>(entity, MakeBoidParameters());
 
   MovementSystem movement_system;
   movement_system.Update(registry, 1.0F);
 
   ExpectVec3Near(registry.Get<Velocity>(entity).value, {6.0F, 8.0F, 0.0F});
-  ExpectVec3Near(registry.Get<Transform>(entity).position,
-                 {6.0F, 8.0F, 0.0F});
+  ExpectVec3Near(registry.Get<Transform>(entity).position, {6.0F, 8.0F, 0.0F});
 }
 
 }  // namespace

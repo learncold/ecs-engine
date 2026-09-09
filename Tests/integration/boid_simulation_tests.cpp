@@ -2,19 +2,30 @@
 
 #include <cmath>
 #include <cstddef>
+#include <glm/vec3.hpp>
 #include <vector>
 
-#include <glm/vec3.hpp>
-
+#include "Boids/Common/boid_parameters.h"
+#include "Boids/Common/boid_simulation_config.h"
+#include "Boids/ECS/Components/acceleration.h"
+#include "Boids/ECS/Components/velocity.h"
+#include "Boids/ECS/Systems/boid_orientation_system.h"
+#include "Boids/ECS/Systems/boundary_system.h"
+#include "Boids/ECS/boid_simulation.h"
 #include "Engine/ECS/registry.h"
-#include "Sandbox/Boids/ECS/boid_simulation.h"
-#include "Sandbox/Boids/ECS/Components/acceleration.h"
-#include "Sandbox/Boids/ECS/Components/boid.h"
-#include "Sandbox/Boids/ECS/Components/transform.h"
-#include "Sandbox/Boids/ECS/Components/velocity.h"
-#include "Sandbox/Boids/ECS/Systems/boundary_system.h"
+#include "Engine/Renderer/mesh_renderer.h"
+#include "Engine/Renderer/transform.h"
 
 namespace {
+
+using boids::BoidParameters;
+using boids::BoidSimulationConfig;
+using boids::ecs::Acceleration;
+using boids::ecs::BoidOrientationSystem;
+using boids::ecs::BoidSimulation;
+using boids::ecs::BoundarySystem;
+using boids::ecs::Velocity;
+using engine::renderer::Transform;
 
 struct BoidState {
   glm::vec3 position;
@@ -32,9 +43,8 @@ std::vector<BoidState> CollectStates(engine::ecs::Registry& registry) {
   std::vector<BoidState> states;
   registry.CreateView<Transform, Velocity>().Each(
       [&states](const Transform& transform, const Velocity& velocity) {
-        states.push_back(
-            BoidState{.position = transform.position,
-                      .velocity = velocity.value});
+        states.push_back(BoidState{.position = transform.position,
+                                   .velocity = velocity.value});
       });
   return states;
 }
@@ -50,12 +60,29 @@ TEST(BoidSimulationTest, CreatesRequestedNumberOfCompleteBoids) {
   EXPECT_EQ(registry.EntityCount(), config.boid_count);
 
   std::size_t complete_boid_count = 0U;
-  registry.CreateView<Transform, Velocity, Acceleration, Boid>().Each(
-      [&complete_boid_count](const Transform&, const Velocity&,
-                             const Acceleration&, const Boid&) {
-        ++complete_boid_count;
-      });
+  registry
+      .CreateView<Transform, engine::renderer::MeshRenderer, Velocity,
+                  Acceleration, BoidParameters>()
+      .Each([&complete_boid_count](
+                const Transform&, const engine::renderer::MeshRenderer&,
+                const Velocity&, const Acceleration&,
+                const BoidParameters&) { ++complete_boid_count; });
   EXPECT_EQ(complete_boid_count, config.boid_count);
+}
+
+TEST(BoidSimulationTest, InitializesTransformFromVelocity) {
+  BoidSimulationConfig config;
+  config.boid_count = 4U;
+  BoidSimulation simulation(config);
+  simulation.Initialize();
+
+  simulation.GetRegistry().CreateView<Transform, Velocity>().Each(
+      [](const Transform& transform, const Velocity& velocity) {
+        const glm::vec3 forward =
+            transform.rotation * glm::vec3{0.0F, 0.0F, 1.0F};
+        ExpectVec3Near(forward, glm::normalize(velocity.value));
+        EXPECT_FLOAT_EQ(transform.scale, 0.7F);
+      });
 }
 
 TEST(BoidSimulationTest, ReproducesInitialStateWithSameSeed) {
@@ -112,10 +139,9 @@ TEST(BoidSimulationTest, KeepsStateFiniteAndInsideBoundaryAcrossFrames) {
     simulation.Update(kDeltaSeconds);
   }
 
-  simulation.GetRegistry()
-      .CreateView<Transform, Velocity, Acceleration>()
-      .Each([&config](const Transform& transform, const Velocity& velocity,
-                     const Acceleration& acceleration) {
+  simulation.GetRegistry().CreateView<Transform, Velocity, Acceleration>().Each(
+      [&config](const Transform& transform, const Velocity& velocity,
+                const Acceleration& acceleration) {
         for (int axis = 0; axis < 3; ++axis) {
           EXPECT_TRUE(std::isfinite(transform.position[axis]));
           EXPECT_TRUE(std::isfinite(velocity.value[axis]));
@@ -129,18 +155,15 @@ TEST(BoidSimulationTest, KeepsStateFiniteAndInsideBoundaryAcrossFrames) {
 TEST(BoundarySystemTest, ClampsPositionAndReflectsOutwardVelocity) {
   engine::ecs::Registry registry;
   const engine::ecs::Entity entity = registry.Create();
-  registry.Emplace<Transform>(
-      entity, Transform{.position = {3.0F, -4.0F, 1.0F}});
-  registry.Emplace<Velocity>(entity,
-                             Velocity{.value = {1.0F, -2.0F, 3.0F}});
+  registry.Emplace<Transform>(entity,
+                              Transform{.position = {3.0F, -4.0F, 1.0F}});
+  registry.Emplace<Velocity>(entity, Velocity{.value = {1.0F, -2.0F, 3.0F}});
   BoundarySystem boundary_system(2.0F);
 
   boundary_system.Update(registry, 0.0F);
 
-  ExpectVec3Near(registry.Get<Transform>(entity).position,
-                 {2.0F, -2.0F, 1.0F});
-  ExpectVec3Near(registry.Get<Velocity>(entity).value,
-                 {-1.0F, 2.0F, 3.0F});
+  ExpectVec3Near(registry.Get<Transform>(entity).position, {2.0F, -2.0F, 1.0F});
+  ExpectVec3Near(registry.Get<Velocity>(entity).value, {-1.0F, 2.0F, 3.0F});
 }
 
 TEST(BoidSimulationTest, RejectsNegativeDeltaTime) {
