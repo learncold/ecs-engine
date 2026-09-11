@@ -1,11 +1,37 @@
+#include <exception>
+#include <iostream>
+#include <string_view>
+#include <vector>
+
 #include "App/UI/performance_panel.h"
+#include "App/command_line_options.h"
 #include "Boids/Common/boid_simulation_config.h"
 #include "Boids/ECS/boid_simulation.h"
 #include "Engine/Core/application.h"
 #include "Engine/ECSRenderer/ecs_render_system.h"
 #include "Engine/Renderer/agent_render_manager.h"
 
-int main() {
+int main(int argc, char* argv[]) try {
+  std::vector<std::string_view> arguments;
+  for (int index = 1; index < argc; ++index) {
+    arguments.emplace_back(argv[index]);
+  }
+  const auto options = app::ParseCommandLineOptions(arguments);
+  if (options.help) {
+    app::PrintUsage(std::cout);
+    return 0;
+  }
+
+  if (options.benchmark_enabled) {
+    boids::ecs::BoidSimulation ecs_simulation(options.simulation_config);
+    ecs_simulation.Initialize();
+    const engine::benchmark::Benchmarker benchmarker(options.benchmark_config);
+    const auto result = benchmarker.Benchmark(
+        [&ecs_simulation](float fixed_dt) { ecs_simulation.Update(fixed_dt); });
+    app::PrintBenchmarkResult(std::cout, options, result);
+    return 0;
+  }
+
   engine::core::Application application;
   const boids::BoidSimulationConfig simulation_config;
   boids::ecs::BoidSimulation ecs_simulation(simulation_config);
@@ -42,4 +68,7 @@ int main() {
         }
       });
   return 0;
+} catch (const std::exception& error) {
+  std::cerr << "Error: " << error.what() << '\n';
+  return 1;
 }

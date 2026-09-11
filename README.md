@@ -80,6 +80,40 @@ cmake --preset clangd
 갱신 후에도 이전 오류 표시가 남으면 명령 팔레트에서
 `clangd: Restart language server`를 실행합니다.
 
+## Run and Benchmark
+
+옵션 없이 실행하면 기존 3D 시각화를 사용합니다.
+
+```powershell
+.\build\vs2022\App\Debug\App.exe
+```
+
+성능 측정에는 Release 빌드를 사용합니다. `--benchmark`는 창이나 OpenGL
+컨텍스트를 생성하지 않고 ECS naive 시뮬레이션만 실행합니다.
+
+```powershell
+cmake --build --preset vs2022-release
+.\build\vs2022\App\Release\App.exe --benchmark --agents 100 --seed 42 --warmup 100 --steps 1000 --dt 0.016666667
+```
+
+`--benchmark`만 지정해도 위 기본 조건으로 실행됩니다. `--agents`, `--seed`,
+`--warmup`, `--steps`, `--dt`는 벤치마크 전용 옵션이며 `--help`로 사용법을
+확인할 수 있습니다. 워밍업은 0도 허용하지만 에이전트 수, 측정 스텝 수와
+timestep은 양수여야 합니다. Boid 행동 파라미터는 `BoidSimulationConfig`의
+기본값을 사용하며 실행 조건과 함께 출력합니다.
+
+`Benchmarker`는 고정 timestep으로 업데이트 콜백을 동기 호출합니다.
+초기화·워밍업·렌더 데이터 추출·UI·결과 출력은 측정에서 제외하고,
+각 업데이트 호출의 경과 시간을 합산해 총 시간과 평균 `ms/step`, `updates/s`를
+콘솔에 출력합니다. 업데이트에는 기존 `BoidOrientationSystem`도 포함됩니다.
+고정 timestep은 가상 시간의 진행량이며 실행 속도를 제한하지 않습니다.
+측정값은 CPU 사용 시간이 아닌 실제 경과 시간으로, 스케줄링 지연과 콜백 호출
+비용을 포함합니다. 반복 호출 시 Benchmarker가 시뮬레이션을 초기화하지는 않습니다.
+
+OOP/Grid 구현, CSV 저장, 자동 반복 실험과 CPU·메모리·캐시 분석은 후속 범위입니다.
+실행 파일은 시각화 모드와 공유하므로 기존 그래픽 라이브러리 빌드/배포 의존성은
+유지되지만, `Engine::Benchmark` 타깃 자체는 표준 C++ 라이브러리만 사용합니다.
+
 ## Project Layout
 
 ```text
@@ -94,6 +128,7 @@ ECS-engine/
 │  └─ architecture.md
 ├─ Engine/
 │  ├─ Core/
+│  ├─ Benchmark/
 │  ├─ ECS/
 │  ├─ ECSRenderer/
 │  ├─ Renderer/

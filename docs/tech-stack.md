@@ -36,6 +36,11 @@ GLFW와 Dear ImGui는 vcpkg 매니페스트(`vcpkg.json`)로 관리한다. Dear 
 - 키보드와 마우스 입력 상태 수집
 - 단순 3D 렌더링과 Orbit Camera 조작
 - FPS, 프레임 시간, 에이전트 수와 VSync 상태를 보여 주는 최소 UI
+- `--benchmark`로 창 없이 고정 스텝 시뮬레이션을 실행하고 업데이트 시간 측정
+
+`Engine::Benchmark`는 `std::chrono::steady_clock`과 업데이트 콜백을 사용하는
+표준 C++ 전용 타깃이다. 벤치마크 모드에서는 GLFW/OpenGL/ImGui를 초기화하지
+않는다. 실행 파일은 시각화 모드와 공유하므로 기존 링크 의존성은 유지한다.
 
 런타임 코드는 `Engine`, 연구 도메인은 `Boids`, 실행 조립은 `App` CMake 타깃으로
 분리한다. ECS 렌더 어댑터는 별도 `Engine::ECSRenderer` 타깃이며 공통
