@@ -13,6 +13,12 @@ function(configure_engine_target target_name)
     endif()
 endfunction()
 
+add_library(EngineBenchmark STATIC
+    Benchmark/benchmarker.cpp
+)
+add_library(Engine::Benchmark ALIAS EngineBenchmark)
+configure_engine_target(EngineBenchmark)
+
 add_library(EngineInput STATIC
     Input/input.cpp
 )

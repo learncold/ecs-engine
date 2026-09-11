@@ -43,7 +43,16 @@ CMake 타깃은 프로젝트 루트를 헤더 검색 경로로 사용하므로
 - `Renderer`: 공통 `Transform`, `MeshRenderer`, Model 행렬 변환, 카메라,
   Orbit 조작, Grid/경계선, Instanced Agent 렌더링
 - `ECSRenderer`: ECS View를 공통 Renderer 입력으로 바꾸는 어댑터
-- `Benchmark`: 이후 추가할 공통 성능 측정 기능
+- `Benchmark`: 고정 timestep의 워밍업·측정 루프와 업데이트 시간 수집
+
+`--benchmark` 모드에서 App은 창이나 렌더러를 생성하기 전에 분기한다.
+시뮬레이션 초기화 후 `Benchmarker::Benchmark()`에 `BoidSimulation::Update()`를
+호출하는 람다를 전달한다. Benchmarker는 ECS나 Boids를 알지 못하며, 표준 C++만
+사용하는 `Engine::Benchmark` 타깃이다. 설정은 고정 timestep, 워밍업 스텝 수와
+측정 스텝 수를 포함한다. 워밍업 후 각 콜백 호출의 경과 시간만 합산하고 결과를
+반환하며, App이 실행 조건과 결과를 출력한다. 시뮬레이션 초기화와 수명은 App이
+관리한다. 기존 Update의 OrientationSystem은 포함되지만 렌더 데이터 추출과
+GPU 호출은 실행하지 않는다. 옵션 없는 실행은 기존 Application 루프를 사용한다.
 
 `Transform`은 position, rotation quaternion, 균일 scale을 가진다. Model 행렬은
 `Translation × Rotation × Scale` 순서로 만든다. 렌더링 포함 여부는 별도 visible

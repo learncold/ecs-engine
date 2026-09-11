@@ -1,5 +1,6 @@
 add_executable(App
     main.cpp
+    command_line_options.cpp
     UI/performance_panel.cpp
 )
 
@@ -13,6 +14,7 @@ target_compile_features(App PRIVATE cxx_std_20)
 target_link_libraries(App
     PRIVATE
         Boids::ECS
+        Engine::Benchmark
         Engine::Core
         Engine::ECSRenderer
         Engine::Renderer
