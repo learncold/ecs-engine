@@ -6,4 +6,4 @@ out/
 *.VC.db
 *.VC.opendb
 compile_commands.json
-
+*.bkp
