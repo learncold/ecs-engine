@@ -100,7 +100,7 @@ ECS-engine/
 
 `Boids/` contains the research domain and its OOP/ECS implementations. The OOP implementation must not depend on `Engine/ECS`; only the ECS implementation uses that module. Shared initial conditions and parameters may be placed in the common Boids namespace.
 
-`Boids/Common/` provides shared configuration and `boids::BoidParameters` through the header-only `Boids::Common` target, without Engine or ECS dependencies. `Boids/ECS/` contains the ECS implementation; `Boids/OOP/` is reserved for the future OOP implementation. `max_alignment_force` limits alignment steering before weighting, not total acceleration.
+`Boids/Common/` provides shared configuration and `boids::BoidParameters` through the header-only `Boids::Common` target, without Engine or ECS dependencies. `Boids/ECS/` contains the ECS implementation; `Boids/OOP/` contains the object-oriented comparison implementation and must remain independent of `Engine/ECS`. `max_alignment_force` limits alignment steering before weighting, not total acceleration.
 
 In `Engine/`, `Boids/`, and `App/`, keep related `.h` and `.cpp` files together in feature directories; do not add mirrored `include/` and `src/` trees. CMake targets use the project root as an include search path to preserve module-qualified includes such as `Engine/Core/application.h` and `Boids/Common/boid_parameters.h`. Keep the existing module dependency boundaries even though headers are visible through this shared search path. Tests and third-party code retain their separate layouts.
 
@@ -243,6 +243,13 @@ Avoid adding new dependencies unless they materially reduce implementation risk 
 
 Do not commit generated build output.
 
+Follow the repository's recent commit and pull request convention:
+
+- Write concise English Conventional Commit subjects such as `feat: add simulation benchmark`. Do not include `codex` in commit messages.
+- Use the commit subject as the pull request title when one commit represents the feature.
+- For work that completes a GitHub issue, ignore the pull request template and use only `Closes #<issue-number>` as the pull request body unless the user requests additional detail.
+- Check the latest relevant commits and merged pull requests before committing so the wording remains consistent with current repository history.
+
 Ignored paths should include:
 
 ```text
@@ -260,14 +267,6 @@ cmake --build --preset vs2022-debug
 
 ## Current Priority
 
-The next implementation priority is:
-
-1. Define ECS core interfaces
-2. Implement Entity and Registry
-3. Add Transform and Velocity components using 3D vectors
-4. Add MovementSystem
-5. Add Boid components and BoidSystem
-6. Add simple 3D rendering for agents
-7. Add benchmark timing
-8. Add OOP comparison implementation
-9. Add 3D Grid spatial partitioning
+The next implementation priority is 3D Grid spatial partitioning for both the
+OOP and ECS Boids implementations, followed by reproducible benchmark runs and
+result analysis.

@@ -17,11 +17,13 @@ TEST(CommandLineOptionsTest, DefaultsToInteractiveAndSupportsHelp) {
 }
 
 TEST(CommandLineOptionsTest, ParsesExplicitExperimentConditions) {
-  const std::array args{"--agents"sv, "500"sv,  "--seed"sv,     "0"sv,
-                        "--warmup"sv, "0"sv,    "--steps"sv,    "25"sv,
-                        "--dt"sv,     "0.02"sv, "--benchmark"sv};
+  const std::array args{"--implementation"sv, "oop"sv, "--agents"sv,
+                        "500"sv, "--seed"sv, "0"sv, "--warmup"sv,
+                        "0"sv, "--steps"sv, "25"sv, "--dt"sv,
+                        "0.02"sv, "--benchmark"sv};
   const auto options = app::ParseCommandLineOptions(args);
   EXPECT_TRUE(options.benchmark_enabled);
+  EXPECT_EQ(options.implementation, app::SimulationImplementation::Oop);
   EXPECT_EQ(options.simulation_config.boid_count, 500U);
   EXPECT_EQ(options.simulation_config.random_seed, 0U);
   EXPECT_EQ(options.benchmark_config.warmup_steps, 0U);
@@ -37,6 +39,7 @@ TEST(CommandLineOptionsTest, RejectsMalformedOrAmbiguousInvocations) {
       {"--benchmark", "--steps", "0"},
       {"--benchmark", "--agents", "0"},
       {"--benchmark", "--agents", "-1"},
+      {"--benchmark", "--implementation", "invalid"},
       {"--benchmark", "--steps", "3junk"},
       {"--benchmark", "--seed", "4294967296"},
       {"--benchmark", "--dt", "nan"},

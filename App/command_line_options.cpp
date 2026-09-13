@@ -36,8 +36,9 @@ CommandLineOptions ParseCommandLineOptions(
       options.help = true;
       continue;
     }
-    if (option != "--agents" && option != "--seed" && option != "--warmup" &&
-        option != "--steps" && option != "--dt") {
+    if (option != "--implementation" && option != "--agents" &&
+        option != "--seed" && option != "--warmup" && option != "--steps" &&
+        option != "--dt") {
       throw std::invalid_argument("Unknown option: " + std::string(option));
     }
     if (++index == arguments.size()) {
@@ -45,7 +46,16 @@ CommandLineOptions ParseCommandLineOptions(
     }
     const auto value = arguments[index];
     has_settings = true;
-    if (option == "--agents") {
+    if (option == "--implementation") {
+      if (value == "ecs") {
+        options.implementation = SimulationImplementation::Ecs;
+      } else if (value == "oop") {
+        options.implementation = SimulationImplementation::Oop;
+      } else {
+        throw std::invalid_argument(
+            "Invalid value for --implementation: expected ecs or oop");
+      }
+    } else if (option == "--agents") {
       options.simulation_config.boid_count =
           ParseNumber<std::size_t>(value, option);
     } else if (option == "--seed") {
@@ -74,8 +84,9 @@ CommandLineOptions ParseCommandLineOptions(
 }
 
 void PrintUsage(std::ostream& output) {
-  output << "Usage: App.exe [--benchmark [--agents N] [--seed N]\n"
-            "               [--warmup N] [--steps N] [--dt SECONDS]]\n"
+  output << "Usage: App.exe [--benchmark [--implementation ecs|oop]\n"
+            "               [--agents N] [--seed N] [--warmup N]\n"
+            "               [--steps N] [--dt SECONDS]]\n"
             "       App.exe --help\n"
             "Without options: interactive 3D simulation.\n"
             "Benchmark defaults: agents=100, seed=42, warmup=100, steps=1000, "
@@ -87,7 +98,11 @@ void PrintBenchmarkResult(std::ostream& output,
                           const engine::benchmark::BenchmarkResult& result) {
   const auto& simulation_config = options.simulation_config;
   const auto& parameters = simulation_config.parameters;
-  output << std::setprecision(9) << "Benchmark: ECS / naive / simulation-only\n"
+  const char* implementation =
+      options.implementation == SimulationImplementation::Ecs ? "ECS"
+                                                              : "OOP";
+  output << std::setprecision(9) << "Benchmark: " << implementation
+         << " / naive / simulation-only\n"
 #ifdef NDEBUG
          << "Build: Release (NDEBUG)\n"
 #else
