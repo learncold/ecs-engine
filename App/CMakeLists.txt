@@ -14,6 +14,7 @@ target_compile_features(App PRIVATE cxx_std_20)
 target_link_libraries(App
     PRIVATE
         Boids::ECS
+        Boids::OOP
         Engine::Benchmark
         Engine::Core
         Engine::ECSRenderer

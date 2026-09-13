@@ -6,7 +6,7 @@
 위한 경량 런타임이다. 구현은 책임에 따라 `Engine`, `Boids`, `App`으로 나뉜다.
 
 - `Engine`: 재사용 가능한 실행, 입력, ECS, 렌더링 데이터와 렌더링 기능
-- `Boids`: Boids 규칙과 ECS 시뮬레이션
+- `Boids`: 공통 Boids 설정과 ECS/OOP 시뮬레이션
 - `App`: Engine과 Boids를 생성하고 콜백으로 연결하는 실행 계층
 
 의존 방향은 `App → Engine`, `App → Boids`, `Boids → Engine`이다. `Engine`은
@@ -46,13 +46,14 @@ CMake 타깃은 프로젝트 루트를 헤더 검색 경로로 사용하므로
 - `Benchmark`: 고정 timestep의 워밍업·측정 루프와 업데이트 시간 수집
 
 `--benchmark` 모드에서 App은 창이나 렌더러를 생성하기 전에 분기한다.
-시뮬레이션 초기화 후 `Benchmarker::Benchmark()`에 `BoidSimulation::Update()`를
+`--implementation ecs|oop` 옵션에 따라 시뮬레이션을 생성한 후 공통
+`RunBenchmark`가 `Benchmarker::Benchmark()`에 `BoidSimulation::Update()`를
 호출하는 람다를 전달한다. Benchmarker는 ECS나 Boids를 알지 못하며, 표준 C++만
 사용하는 `Engine::Benchmark` 타깃이다. 설정은 고정 timestep, 워밍업 스텝 수와
 측정 스텝 수를 포함한다. 워밍업 후 각 콜백 호출의 경과 시간만 합산하고 결과를
-반환하며, App이 실행 조건과 결과를 출력한다. 시뮬레이션 초기화와 수명은 App이
-관리한다. 기존 Update의 OrientationSystem은 포함되지만 렌더 데이터 추출과
-GPU 호출은 실행하지 않는다. 옵션 없는 실행은 기존 Application 루프를 사용한다.
+반환하며, App이 구현명, 실행 조건과 결과를 출력한다. 시뮬레이션 초기화와 수명은
+App이 관리한다. 두 구현 모두 방향 갱신까지 포함하지만 렌더 데이터 추출과 GPU
+호출은 실행하지 않는다. 옵션 없는 실행은 기존 ECS Application 루프를 사용한다.
 
 `Transform`은 position, rotation quaternion, 균일 scale을 가진다. Model 행렬은
 `Translation × Rotation × Scale` 순서로 만든다. 렌더링 포함 여부는 별도 visible
@@ -61,7 +62,7 @@ GPU 호출은 실행하지 않는다. 옵션 없는 실행은 기존 Application
 이 데이터와 함수는 `Engine/Renderer/`와 `engine::renderer` namespace에 둔다.
 별도 Scene 폴더나 namespace는 없다. 빌드에서는 GLM만 사용하는
 `Engine::RenderData` 타깃에 `transform.cpp`를 두고, `Engine::Renderer`와
-`Boids::ECS`가 이를 사용한다. 따라서 Boids는 Transform 계산을 위해
+`Boids::ECS`와 `Boids::OOP`가 이를 사용한다. 따라서 Boids는 Transform 계산을 위해
 OpenGL 렌더러에 의존할 필요가 없다.
 
 ## ECS 렌더 경계
@@ -88,10 +89,19 @@ ECS 경로에서는 `EcsRenderSystem`이 Registry로부터 이 배열을 만든�
   헤더 전용 `Boids::Common` 타깃이며 Engine과 ECS 구현에 의존하지 않는다.
 - `ECS/`: `boids::ecs` namespace의 Component, System, 시뮬레이션.
   `Boids::ECS` 타깃은 `Boids::Common`을 사용한다.
-- `OOP/`: 향후 OOP 비교 구현을 추가할 위치. 현재 구현과 빌드 타깃은 없다.
+- `OOP/`: `boids::oop::BoidObject`와 `BoidSimulation`을 제공하는 객체 중심 기준
+  구현. `Boids::OOP` 타깃은 `Engine::ECS`에 의존하지 않는다.
 
 공통 헤더는 `Boids/Common/`에, ECS 헤더와 소스는 `Boids/ECS/` 및 그 아래
-`Components/`, `Systems/`에 둔다. 공통 헤더는 `Boids/Common/...`으로 포함한다.
+`Components/`, `Systems/`에 두며 OOP 코드는 `Boids/OOP/`에 둔다. 공통 헤더는
+`Boids/Common/...`으로 포함한다.
+
+OOP 구현은 `std::vector<BoidObject>`에 개체를 값으로 연속 저장한다. 각 객체는
+Transform, MeshRenderer, 속도, 가속도와 BoidParameters를 소유하고 Boids 힘 계산,
+이동, 경계 반사와 방향 갱신을 수행한다. 시뮬레이션은 초기화와 객체 배열의 단계별
+순서를 관리하여 모든 개체가 같은 스텝 시작 상태를 기준으로 이웃을 계산하게 한다.
+ECS 구현과 같은 설정, 난수 seed와 생성 순서를 사용하며 동등성 테스트에서 초기
+상태와 여러 업데이트 후의 위치·속도·가속도·방향을 비교한다.
 
 `BoidParameters`는 개체 전체가 아닌 행동 매개변수 묶음이며, ECS에서는
 이 공통 타입을 그대로 컴포넌트로 저장한다. 설정의 `parameters` 멤버가 초기값을
@@ -103,5 +113,5 @@ Entity 생성 시 Engine의 Transform과 MeshRenderer를
 방향에 맞춘다.
 
 App에는 System 구현, Registry View 순회, Model 행렬 생성, OpenGL 호출을 두지
-않는다. Material 시스템, 범용 Mesh 로딩, Scene Graph와 OOP Boids 구현은 현재
-범위에 포함하지 않는다.
+않는다. Material 시스템, 범용 Mesh 로딩과 Scene Graph는 현재 범위에 포함하지
+않는다.

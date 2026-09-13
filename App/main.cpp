@@ -7,6 +7,7 @@
 #include "App/command_line_options.h"
 #include "Boids/Common/boid_simulation_config.h"
 #include "Boids/ECS/boid_simulation.h"
+#include "Boids/OOP/boid_simulation.h"
 #include "Engine/Core/application.h"
 #include "Engine/ECSRenderer/ecs_render_system.h"
 #include "Engine/Renderer/agent_render_manager.h"
@@ -23,11 +24,17 @@ int main(int argc, char* argv[]) try {
   }
 
   if (options.benchmark_enabled) {
-    boids::ecs::BoidSimulation ecs_simulation(options.simulation_config);
-    ecs_simulation.Initialize();
-    const engine::benchmark::Benchmarker benchmarker(options.benchmark_config);
-    const auto result = benchmarker.Benchmark(
-        [&ecs_simulation](float fixed_dt) { ecs_simulation.Update(fixed_dt); });
+    engine::benchmark::BenchmarkResult result;
+
+    switch (options.implementation) {
+      case app::SimulationImplementation::Ecs:
+        result = app::RunBenchmark<boids::ecs::BoidSimulation>(options);
+        break;
+      case app::SimulationImplementation::Oop:
+        result = app::RunBenchmark<boids::oop::BoidSimulation>(options);
+        break;
+    }
+
     app::PrintBenchmarkResult(std::cout, options, result);
     return 0;
   }
