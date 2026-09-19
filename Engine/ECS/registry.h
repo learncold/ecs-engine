@@ -91,35 +91,35 @@ class Registry {
   }
 
   template <typename Component>
-  [[nodiscard]] Component& Get(Entity entity) {
+  [[nodiscard]] Component& GetComponent(Entity entity) {
     auto* storage = FindStorage<Component>();
     if (storage == nullptr) {
       throw std::out_of_range("Requested component storage does not exist");
     }
 
-    return storage->Get(entity);
+    return storage->GetComponent(entity);
   }
 
   template <typename Component>
-  [[nodiscard]] const Component& Get(Entity entity) const {
+  [[nodiscard]] const Component& GetComponent(Entity entity) const {
     const auto* storage = FindStorage<Component>();
     if (storage == nullptr) {
       throw std::out_of_range("Requested component storage does not exist");
     }
 
-    return storage->Get(entity);
+    return storage->GetComponent(entity);
   }
 
   template <typename Component>
-  [[nodiscard]] Component* TryGet(Entity entity) {
+  [[nodiscard]] Component* TryGetComponent(Entity entity) {
     auto* storage = FindStorage<Component>();
-    return storage != nullptr ? storage->TryGet(entity) : nullptr;
+    return storage != nullptr ? storage->TryGetComponent(entity) : nullptr;
   }
 
   template <typename Component>
-  [[nodiscard]] const Component* TryGet(Entity entity) const {
+  [[nodiscard]] const Component* TryGetComponent(Entity entity) const {
     const auto* storage = FindStorage<Component>();
-    return storage != nullptr ? storage->TryGet(entity) : nullptr;
+    return storage != nullptr ? storage->TryGetComponent(entity) : nullptr;
   }
 
   template <typename... Components>
@@ -255,10 +255,10 @@ class View {
                             std::index_sequence<component_indices...>) {
     if constexpr (std::is_invocable_v<Function&, Entity, Components&...>) {
       std::invoke(function, entity,
-                  (*std::get<component_indices>(storages_)->TryGet(entity))...);
+                  (*std::get<component_indices>(storages_)->TryGetComponent(entity))...);
     } else if constexpr (std::is_invocable_v<Function&, Components&...>) {
       std::invoke(function,
-                  (*std::get<component_indices>(storages_)->TryGet(entity))...);
+                  (*std::get<component_indices>(storages_)->TryGetComponent(entity))...);
     } else {
       static_assert(kAlwaysFalse<Function>,
                     "View callback must accept (Entity, Components&...) or "

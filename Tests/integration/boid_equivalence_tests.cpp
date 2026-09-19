@@ -66,19 +66,19 @@ void CompareSimulations(const boids::BoidSimulationConfig& config,
       SCOPED_TRACE(::testing::Message() << "boid=" << index);
       const auto entity = entities[index];
       const auto& object = oop_simulation.Boids()[index];
-      const auto& transform = registry.Get<Transform>(entity);
+      const auto& transform = registry.GetComponent<Transform>(entity);
       {
         SCOPED_TRACE("position");
         ExpectVec3Near(object.Position(), transform.position);
       }
       {
         SCOPED_TRACE("velocity");
-        ExpectVec3Near(object.Velocity(), registry.Get<Velocity>(entity).value);
+        ExpectVec3Near(object.Velocity(), registry.GetComponent<Velocity>(entity).value);
       }
       {
         SCOPED_TRACE("acceleration");
         ExpectVec3Near(object.Acceleration(),
-                       registry.Get<Acceleration>(entity).value);
+                       registry.GetComponent<Acceleration>(entity).value);
       }
       ExpectRotationNear(object.GetTransform().rotation, transform.rotation);
       EXPECT_FLOAT_EQ(object.GetTransform().scale, transform.scale);

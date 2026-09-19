@@ -51,9 +51,9 @@ TEST_F(ViewTest, InvokesEntityCallbackForMatchingEntity) {
       });
 
   EXPECT_EQ(callback_count, 1);
-  EXPECT_FLOAT_EQ(registry_.Get<Transform>(moving_entity_).x, 1.5F);
-  EXPECT_FLOAT_EQ(registry_.Get<Transform>(moving_entity_).y, 3.5F);
-  EXPECT_FLOAT_EQ(registry_.Get<Transform>(moving_entity_).z, 5.5F);
+  EXPECT_FLOAT_EQ(registry_.GetComponent<Transform>(moving_entity_).x, 1.5F);
+  EXPECT_FLOAT_EQ(registry_.GetComponent<Transform>(moving_entity_).y, 3.5F);
+  EXPECT_FLOAT_EQ(registry_.GetComponent<Transform>(moving_entity_).z, 5.5F);
 }
 
 TEST_F(ViewTest, InvokesComponentCallbackForMatchingEntity) {
@@ -68,9 +68,9 @@ TEST_F(ViewTest, InvokesComponentCallbackForMatchingEntity) {
       });
 
   EXPECT_EQ(callback_count, 1);
-  EXPECT_FLOAT_EQ(registry_.Get<Velocity>(moving_entity_).x, 1.5F);
-  EXPECT_FLOAT_EQ(registry_.Get<Velocity>(moving_entity_).y, 3.5F);
-  EXPECT_FLOAT_EQ(registry_.Get<Velocity>(moving_entity_).z, 5.5F);
+  EXPECT_FLOAT_EQ(registry_.GetComponent<Velocity>(moving_entity_).x, 1.5F);
+  EXPECT_FLOAT_EQ(registry_.GetComponent<Velocity>(moving_entity_).y, 3.5F);
+  EXPECT_FLOAT_EQ(registry_.GetComponent<Velocity>(moving_entity_).z, 5.5F);
 }
 
 TEST_F(ViewTest, SkipsCallbackWhenRequiredStorageIsMissing) {

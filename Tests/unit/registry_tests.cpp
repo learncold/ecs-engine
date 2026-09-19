@@ -54,9 +54,9 @@ TEST_F(RegistryTest, EmplacesAndRetrievesComponent) {
 
   EXPECT_EQ(component.value, 10);
   EXPECT_TRUE(registry_.Has<TestComponent>(entity));
-  EXPECT_EQ(registry_.Get<TestComponent>(entity).value, 10);
-  ASSERT_NE(registry_.TryGet<TestComponent>(entity), nullptr);
-  EXPECT_EQ(registry_.TryGet<TestComponent>(entity)->value, 10);
+  EXPECT_EQ(registry_.GetComponent<TestComponent>(entity).value, 10);
+  ASSERT_NE(registry_.TryGetComponent<TestComponent>(entity), nullptr);
+  EXPECT_EQ(registry_.TryGetComponent<TestComponent>(entity)->value, 10);
 }
 
 TEST_F(RegistryTest, ProvidesConstComponentAccess) {
@@ -64,9 +64,9 @@ TEST_F(RegistryTest, ProvidesConstComponentAccess) {
   registry_.Emplace<TestComponent>(entity, 10);
   const engine::ecs::Registry& const_registry = registry_;
 
-  EXPECT_EQ(const_registry.Get<TestComponent>(entity).value, 10);
-  ASSERT_NE(const_registry.TryGet<TestComponent>(entity), nullptr);
-  EXPECT_EQ(const_registry.TryGet<TestComponent>(entity)->value, 10);
+  EXPECT_EQ(const_registry.GetComponent<TestComponent>(entity).value, 10);
+  ASSERT_NE(const_registry.TryGetComponent<TestComponent>(entity), nullptr);
+  EXPECT_EQ(const_registry.TryGetComponent<TestComponent>(entity)->value, 10);
 }
 
 TEST_F(RegistryTest, ReplacesExistingComponentOfSameType) {
@@ -76,7 +76,7 @@ TEST_F(RegistryTest, ReplacesExistingComponentOfSameType) {
   TestComponent& replacement = registry_.Emplace<TestComponent>(entity, 20);
 
   EXPECT_EQ(replacement.value, 20);
-  EXPECT_EQ(registry_.Get<TestComponent>(entity).value, 20);
+  EXPECT_EQ(registry_.GetComponent<TestComponent>(entity).value, 20);
 }
 
 TEST_F(RegistryTest, StoresDifferentComponentTypesIndependently) {
@@ -86,8 +86,8 @@ TEST_F(RegistryTest, StoresDifferentComponentTypesIndependently) {
 
   EXPECT_TRUE(registry_.Has<TestComponent>(entity));
   EXPECT_TRUE(registry_.Has<OtherComponent>(entity));
-  EXPECT_EQ(registry_.Get<TestComponent>(entity).value, 10);
-  EXPECT_EQ(registry_.Get<OtherComponent>(entity).value, 20);
+  EXPECT_EQ(registry_.GetComponent<TestComponent>(entity).value, 10);
+  EXPECT_EQ(registry_.GetComponent<OtherComponent>(entity).value, 20);
 }
 
 TEST_F(RegistryTest, KeepsComponentsSeparatedBetweenEntities) {
@@ -96,15 +96,15 @@ TEST_F(RegistryTest, KeepsComponentsSeparatedBetweenEntities) {
   registry_.Emplace<TestComponent>(first_entity, 10);
   registry_.Emplace<TestComponent>(second_entity, 20);
 
-  EXPECT_EQ(registry_.Get<TestComponent>(first_entity).value, 10);
-  EXPECT_EQ(registry_.Get<TestComponent>(second_entity).value, 20);
+  EXPECT_EQ(registry_.GetComponent<TestComponent>(first_entity).value, 10);
+  EXPECT_EQ(registry_.GetComponent<TestComponent>(second_entity).value, 20);
 }
 
 TEST_F(RegistryTest, ReportsMissingComponentAsAbsent) {
   const auto entity = registry_.Create();
 
   EXPECT_FALSE(registry_.Has<TestComponent>(entity));
-  EXPECT_EQ(registry_.TryGet<TestComponent>(entity), nullptr);
+  EXPECT_EQ(registry_.TryGetComponent<TestComponent>(entity), nullptr);
 }
 
 TEST_F(RegistryTest, ReportsExistingStorageAsMissingForUnassignedEntity) {
@@ -113,16 +113,16 @@ TEST_F(RegistryTest, ReportsExistingStorageAsMissingForUnassignedEntity) {
   registry_.Emplace<TestComponent>(entity_with_component, 10);
 
   EXPECT_FALSE(registry_.Has<TestComponent>(entity_without_component));
-  EXPECT_EQ(registry_.TryGet<TestComponent>(entity_without_component), nullptr);
+  EXPECT_EQ(registry_.TryGetComponent<TestComponent>(entity_without_component), nullptr);
 }
 
 TEST_F(RegistryTest, ThrowsWhenGettingComponentFromMissingStorage) {
   const auto entity = registry_.Create();
   const engine::ecs::Registry& const_registry = registry_;
 
-  EXPECT_THROW(static_cast<void>(registry_.Get<TestComponent>(entity)),
+  EXPECT_THROW(static_cast<void>(registry_.GetComponent<TestComponent>(entity)),
                std::out_of_range);
-  EXPECT_THROW(static_cast<void>(const_registry.Get<TestComponent>(entity)),
+  EXPECT_THROW(static_cast<void>(const_registry.GetComponent<TestComponent>(entity)),
                std::out_of_range);
 }
 
@@ -133,10 +133,10 @@ TEST_F(RegistryTest, ThrowsWhenEntityDoesNotOwnExistingComponent) {
   const engine::ecs::Registry& const_registry = registry_;
 
   EXPECT_THROW(
-      static_cast<void>(registry_.Get<TestComponent>(entity_without_component)),
+      static_cast<void>(registry_.GetComponent<TestComponent>(entity_without_component)),
       std::out_of_range);
   EXPECT_THROW(static_cast<void>(
-                   const_registry.Get<TestComponent>(entity_without_component)),
+                   const_registry.GetComponent<TestComponent>(entity_without_component)),
                std::out_of_range);
 }
 
@@ -218,7 +218,7 @@ TEST_F(ReusedEntityRegistryTest, RejectsEmplaceWithStaleEntity) {
   EXPECT_THROW(registry_.Emplace<TestComponent>(stale_entity_, 10),
                std::invalid_argument);
   EXPECT_NO_THROW(registry_.Emplace<TestComponent>(current_entity_, 20));
-  EXPECT_EQ(registry_.Get<TestComponent>(current_entity_).value, 20);
+  EXPECT_EQ(registry_.GetComponent<TestComponent>(current_entity_).value, 20);
 }
 
 TEST_F(ReusedEntityRegistryTest,
@@ -229,29 +229,29 @@ TEST_F(ReusedEntityRegistryTest,
   EXPECT_TRUE(registry_.Has<TestComponent>(current_entity_));
 }
 
-TEST_F(ReusedEntityRegistryTest, RejectsGetWithStaleEntity) {
+TEST_F(ReusedEntityRegistryTest, RejectsGetComponentWithStaleEntity) {
   registry_.Emplace<TestComponent>(current_entity_, 10);
   const engine::ecs::Registry& const_registry = registry_;
 
-  EXPECT_THROW(static_cast<void>(registry_.Get<TestComponent>(stale_entity_)),
+  EXPECT_THROW(static_cast<void>(registry_.GetComponent<TestComponent>(stale_entity_)),
                std::out_of_range);
   EXPECT_THROW(
-      static_cast<void>(const_registry.Get<TestComponent>(stale_entity_)),
+      static_cast<void>(const_registry.GetComponent<TestComponent>(stale_entity_)),
       std::out_of_range);
-  EXPECT_EQ(registry_.Get<TestComponent>(current_entity_).value, 10);
-  EXPECT_EQ(const_registry.Get<TestComponent>(current_entity_).value, 10);
+  EXPECT_EQ(registry_.GetComponent<TestComponent>(current_entity_).value, 10);
+  EXPECT_EQ(const_registry.GetComponent<TestComponent>(current_entity_).value, 10);
 }
 
-TEST_F(ReusedEntityRegistryTest, ReturnsNullFromTryGetForStaleEntity) {
+TEST_F(ReusedEntityRegistryTest, ReturnsNullFromTryGetComponentForStaleEntity) {
   registry_.Emplace<TestComponent>(current_entity_, 10);
   const engine::ecs::Registry& const_registry = registry_;
 
-  EXPECT_EQ(registry_.TryGet<TestComponent>(stale_entity_), nullptr);
-  EXPECT_EQ(const_registry.TryGet<TestComponent>(stale_entity_), nullptr);
-  ASSERT_NE(registry_.TryGet<TestComponent>(current_entity_), nullptr);
-  ASSERT_NE(const_registry.TryGet<TestComponent>(current_entity_), nullptr);
-  EXPECT_EQ(registry_.TryGet<TestComponent>(current_entity_)->value, 10);
-  EXPECT_EQ(const_registry.TryGet<TestComponent>(current_entity_)->value, 10);
+  EXPECT_EQ(registry_.TryGetComponent<TestComponent>(stale_entity_), nullptr);
+  EXPECT_EQ(const_registry.TryGetComponent<TestComponent>(stale_entity_), nullptr);
+  ASSERT_NE(registry_.TryGetComponent<TestComponent>(current_entity_), nullptr);
+  ASSERT_NE(const_registry.TryGetComponent<TestComponent>(current_entity_), nullptr);
+  EXPECT_EQ(registry_.TryGetComponent<TestComponent>(current_entity_)->value, 10);
+  EXPECT_EQ(const_registry.TryGetComponent<TestComponent>(current_entity_)->value, 10);
 }
 
 TEST_F(ReusedEntityRegistryTest,
@@ -261,7 +261,7 @@ TEST_F(ReusedEntityRegistryTest,
   registry_.Remove<TestComponent>(stale_entity_);
 
   EXPECT_TRUE(registry_.Has<TestComponent>(current_entity_));
-  EXPECT_EQ(registry_.Get<TestComponent>(current_entity_).value, 10);
+  EXPECT_EQ(registry_.GetComponent<TestComponent>(current_entity_).value, 10);
 }
 
 TEST_F(ReusedEntityRegistryTest, DoesNotDestroyReusedEntityWithStaleEntity) {
@@ -327,7 +327,7 @@ TEST_F(RegistryTest, ClearInvalidatesHandlesAndRemovesComponents) {
 
   EXPECT_FALSE(registry_.IsAlive(old_entity));
   EXPECT_EQ(registry_.EntityCount(), 0U);
-  EXPECT_EQ(registry_.TryGet<TestComponent>(old_entity), nullptr);
+  EXPECT_EQ(registry_.TryGetComponent<TestComponent>(old_entity), nullptr);
 
   const auto new_entity = registry_.Create();
   EXPECT_EQ(old_entity.Value(), new_entity.Value());

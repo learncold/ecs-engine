@@ -93,8 +93,8 @@ package "engine::ecs" {
     + Emplace(entity, args...) : Component&
     + Remove(entity : Entity) : void
     + Contains(entity : Entity) : bool
-    + Get(entity : Entity) : Component&
-    + TryGet(entity : Entity) : Component*
+    + GetComponent(entity : Entity) : Component&
+    + TryGetComponent(entity : Entity) : Component*
     + Entities() : const vector<Entity>&
     + Size() : size_t
   }
@@ -107,7 +107,7 @@ package "engine::ecs" {
     + Emplace<Component>(entity, args...) : Component&
     + Remove<Component>(entity) : void
     + Has<Component>(entity) : bool
-    + Get<Component>(entity) : Component&
+    + GetComponent<Component>(entity) : Component&
     + CreateView<Components...>() : View
     + Clear() : void
   }

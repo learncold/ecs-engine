@@ -33,7 +33,7 @@ TEST(BoidOrientationSystemTest, UsesVelocityAfterBoundaryReflection) {
   boundary.Update(registry, 0.0F);
   orientation.Update(registry, 0.0F);
 
-  const auto& transform = registry.Get<engine::renderer::Transform>(entity);
+  const auto& transform = registry.GetComponent<engine::renderer::Transform>(entity);
   const glm::vec3 forward = transform.rotation * glm::vec3{0.0F, 0.0F, 1.0F};
   EXPECT_NEAR(forward.x, -1.0F, 0.00001F);
   EXPECT_NEAR(forward.y, 0.0F, 0.00001F);

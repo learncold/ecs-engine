@@ -66,7 +66,7 @@ TEST_F(BoidSystemTest, ProducesZeroAccelerationWithoutNeighbors) {
 
   boid_system_.Update(registry_, 1.0F);
 
-  ExpectVec3Near(registry_.Get<Acceleration>(self).value, {0.0F, 0.0F, 0.0F});
+  ExpectVec3Near(registry_.GetComponent<Acceleration>(self).value, {0.0F, 0.0F, 0.0F});
 }
 
 TEST_F(BoidSystemTest, IgnoresBoidsOutsideNeighborRadius) {
@@ -78,7 +78,7 @@ TEST_F(BoidSystemTest, IgnoresBoidsOutsideNeighborRadius) {
 
   boid_system_.Update(registry_, 1.0F);
 
-  ExpectVec3Near(registry_.Get<Acceleration>(self).value, {0.0F, 0.0F, 0.0F});
+  ExpectVec3Near(registry_.GetComponent<Acceleration>(self).value, {0.0F, 0.0F, 0.0F});
 }
 
 TEST_F(BoidSystemTest, CalculatesSeparationAwayFromNearbyBoid) {
@@ -88,7 +88,7 @@ TEST_F(BoidSystemTest, CalculatesSeparationAwayFromNearbyBoid) {
 
   boid_system_.Update(registry_, 1.0F);
 
-  ExpectVec3Near(registry_.Get<Acceleration>(self).value, {-2.0F, 0.0F, 0.0F});
+  ExpectVec3Near(registry_.GetComponent<Acceleration>(self).value, {-2.0F, 0.0F, 0.0F});
 }
 
 TEST_F(BoidSystemTest, CalculatesAlignmentTowardNeighborVelocity) {
@@ -99,7 +99,7 @@ TEST_F(BoidSystemTest, CalculatesAlignmentTowardNeighborVelocity) {
 
   boid_system_.Update(registry_, 1.0F);
 
-  ExpectVec3Near(registry_.Get<Acceleration>(self).value, {-1.0F, 3.0F, 0.0F});
+  ExpectVec3Near(registry_.GetComponent<Acceleration>(self).value, {-1.0F, 3.0F, 0.0F});
 }
 
 TEST_F(BoidSystemTest, LimitsAlignmentSteeringForce) {
@@ -111,7 +111,7 @@ TEST_F(BoidSystemTest, LimitsAlignmentSteeringForce) {
 
   boid_system_.Update(registry_, 1.0F);
 
-  const glm::vec3 alignment = registry_.Get<Acceleration>(self).value;
+  const glm::vec3 alignment = registry_.GetComponent<Acceleration>(self).value;
   EXPECT_NEAR(glm::length(alignment), 1.0F, kTolerance);
   EXPECT_LT(alignment.x, 0.0F);
   EXPECT_GT(alignment.y, 0.0F);
@@ -126,7 +126,7 @@ TEST_F(BoidSystemTest, DoesNotBrakeWhenNeighborVelocitiesCancelOut) {
 
   boid_system_.Update(registry_, 1.0F);
 
-  ExpectVec3Near(registry_.Get<Acceleration>(self).value, {0.0F, 0.0F, 0.0F});
+  ExpectVec3Near(registry_.GetComponent<Acceleration>(self).value, {0.0F, 0.0F, 0.0F});
 }
 
 TEST_F(BoidSystemTest, CalculatesCohesionTowardNeighborPosition) {
@@ -138,7 +138,7 @@ TEST_F(BoidSystemTest, CalculatesCohesionTowardNeighborPosition) {
 
   boid_system_.Update(registry_, 1.0F);
 
-  ExpectVec3Near(registry_.Get<Acceleration>(self).value, {1.0F, 2.0F, 3.0F});
+  ExpectVec3Near(registry_.GetComponent<Acceleration>(self).value, {1.0F, 2.0F, 3.0F});
 }
 
 TEST_F(BoidSystemTest, AvoidsNonFiniteAccelerationForOverlappingBoids) {
@@ -150,7 +150,7 @@ TEST_F(BoidSystemTest, AvoidsNonFiniteAccelerationForOverlappingBoids) {
 
   boid_system_.Update(registry_, 1.0F);
 
-  const glm::vec3 acceleration = registry_.Get<Acceleration>(self).value;
+  const glm::vec3 acceleration = registry_.GetComponent<Acceleration>(self).value;
   EXPECT_TRUE(std::isfinite(acceleration.x));
   EXPECT_TRUE(std::isfinite(acceleration.y));
   EXPECT_TRUE(std::isfinite(acceleration.z));
@@ -169,8 +169,8 @@ TEST(BoidMovementPipelineTest, LimitsSpeedBeforeUpdatingPosition) {
   MovementSystem movement_system;
   movement_system.Update(registry, 1.0F);
 
-  ExpectVec3Near(registry.Get<Velocity>(entity).value, {6.0F, 8.0F, 0.0F});
-  ExpectVec3Near(registry.Get<Transform>(entity).position, {6.0F, 8.0F, 0.0F});
+  ExpectVec3Near(registry.GetComponent<Velocity>(entity).value, {6.0F, 8.0F, 0.0F});
+  ExpectVec3Near(registry.GetComponent<Transform>(entity).position, {6.0F, 8.0F, 0.0F});
 }
 
 }  // namespace

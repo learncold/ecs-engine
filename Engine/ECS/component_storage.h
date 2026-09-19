@@ -24,13 +24,13 @@ class ComponentStorage final : public IComponentStorage {
 
   template <typename... Args>
   Component& Emplace(Entity entity, Args&&... args) {
-    EnsureSparseSize(entity);
-
     if (Contains(entity)) {
       dense_components_[sparse_[entity.Value()]] =
           Component{std::forward<Args>(args)...};
       return dense_components_[sparse_[entity.Value()]];
     }
+
+    EnsureSparseSize(entity);
 
     sparse_[entity.Value()] = dense_entities_.size();
     dense_entities_.push_back(entity);
@@ -72,7 +72,7 @@ class ComponentStorage final : public IComponentStorage {
            dense_entities_[sparse_[entity_id]] == entity;
   }
 
-  [[nodiscard]] Component& Get(Entity entity) {
+  [[nodiscard]] Component& GetComponent(Entity entity) {
     if (!Contains(entity)) {
       throw std::out_of_range("Entity does not own requested component");
     }
@@ -80,7 +80,7 @@ class ComponentStorage final : public IComponentStorage {
     return dense_components_[sparse_[entity.Value()]];
   }
 
-  [[nodiscard]] const Component& Get(Entity entity) const {
+  [[nodiscard]] const Component& GetComponent(Entity entity) const {
     if (!Contains(entity)) {
       throw std::out_of_range("Entity does not own requested component");
     }
@@ -88,12 +88,12 @@ class ComponentStorage final : public IComponentStorage {
     return dense_components_[sparse_[entity.Value()]];
   }
 
-  [[nodiscard]] Component* TryGet(Entity entity) {
+  [[nodiscard]] Component* TryGetComponent(Entity entity) {
     return Contains(entity) ? &dense_components_[sparse_[entity.Value()]]
                             : nullptr;
   }
 
-  [[nodiscard]] const Component* TryGet(Entity entity) const {
+  [[nodiscard]] const Component* TryGetComponent(Entity entity) const {
     return Contains(entity) ? &dense_components_[sparse_[entity.Value()]]
                             : nullptr;
   }
