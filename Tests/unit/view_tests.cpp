@@ -73,6 +73,21 @@ TEST_F(ViewTest, InvokesComponentCallbackForMatchingEntity) {
   EXPECT_FLOAT_EQ(registry_.GetComponent<Velocity>(moving_entity_).z, 5.5F);
 }
 
+TEST_F(ViewTest, InvokesCallbackForEveryEntityInSingleComponentView) {
+  int callback_count = 0;
+
+  registry_.CreateView<Transform>().Each(
+      [&](engine::ecs::Entity, Transform& transform) {
+        transform.x += 1.0F;
+        ++callback_count;
+      });
+
+  EXPECT_EQ(callback_count, 2);
+  EXPECT_FLOAT_EQ(registry_.GetComponent<Transform>(moving_entity_).x, 2.0F);
+  EXPECT_FLOAT_EQ(
+      registry_.GetComponent<Transform>(transform_only_entity_).x, 11.0F);
+}
+
 TEST_F(ViewTest, SkipsCallbackWhenRequiredStorageIsMissing) {
   int callback_count = 0;
 

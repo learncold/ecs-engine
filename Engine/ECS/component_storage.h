@@ -9,6 +9,9 @@
 
 namespace engine::ecs {
 
+template <typename... Components>
+class View;
+
 class IComponentStorage {
  public:
   virtual ~IComponentStorage() = default;
@@ -72,22 +75,6 @@ class ComponentStorage final : public IComponentStorage {
            dense_entities_[sparse_[entity_id]] == entity;
   }
 
-  [[nodiscard]] Component& GetComponent(Entity entity) {
-    if (!Contains(entity)) {
-      throw std::out_of_range("Entity does not own requested component");
-    }
-
-    return dense_components_[sparse_[entity.Value()]];
-  }
-
-  [[nodiscard]] const Component& GetComponent(Entity entity) const {
-    if (!Contains(entity)) {
-      throw std::out_of_range("Entity does not own requested component");
-    }
-
-    return dense_components_[sparse_[entity.Value()]];
-  }
-
   [[nodiscard]] Component* TryGetComponent(Entity entity) {
     return Contains(entity) ? &dense_components_[sparse_[entity.Value()]]
                             : nullptr;
@@ -105,6 +92,20 @@ class ComponentStorage final : public IComponentStorage {
   [[nodiscard]] std::size_t Size() const { return dense_components_.size(); }
 
  private:
+  template <typename... Components>
+  friend class View;
+
+  // Precondition: entity exists in this storage, and the storage is not
+  // structurally modified between the membership check and this access.
+  [[nodiscard]] Component& GetComponentUnchecked(Entity entity) noexcept {
+    return dense_components_[sparse_[entity.Value()]];
+  }
+
+  [[nodiscard]] const Component& GetComponentUnchecked(
+      Entity entity) const noexcept {
+    return dense_components_[sparse_[entity.Value()]];
+  }
+
   // ensure sparse vector size for some entity
   void EnsureSparseSize(Entity entity) {
     if (!entity.IsValid()) {

@@ -97,7 +97,12 @@ class Registry {
       throw std::out_of_range("Requested component storage does not exist");
     }
 
-    return storage->GetComponent(entity);
+    Component* component = storage->TryGetComponent(entity);
+    if (component == nullptr) {
+      throw std::out_of_range("Entity does not own requested component");
+    }
+
+    return *component;
   }
 
   template <typename Component>
@@ -107,7 +112,12 @@ class Registry {
       throw std::out_of_range("Requested component storage does not exist");
     }
 
-    return storage->GetComponent(entity);
+    const Component* component = storage->TryGetComponent(entity);
+    if (component == nullptr) {
+      throw std::out_of_range("Entity does not own requested component");
+    }
+
+    return *component;
   }
 
   template <typename Component>
@@ -258,12 +268,12 @@ class View {
                             std::index_sequence<component_indices...>) {
     if constexpr (std::is_invocable_v<Function&, Entity, Components&...>) {
       std::invoke(function, entity,
-                  (*std::get<component_indices>(storages_)->TryGetComponent(
-                      entity))...);
+                  (std::get<component_indices>(storages_)
+                       ->GetComponentUnchecked(entity))...);
     } else if constexpr (std::is_invocable_v<Function&, Components&...>) {
       std::invoke(function,
-                  (*std::get<component_indices>(storages_)->TryGetComponent(
-                      entity))...);
+                  (std::get<component_indices>(storages_)
+                       ->GetComponentUnchecked(entity))...);
     } else {
       static_assert(kAlwaysFalse<Function>,
                     "View callback must accept (Entity, Components&...) or "

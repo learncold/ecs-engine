@@ -93,10 +93,10 @@ package "engine::ecs" {
     + Emplace(entity, args...) : Component&
     + Remove(entity : Entity) : void
     + Contains(entity : Entity) : bool
-    + GetComponent(entity : Entity) : Component&
     + TryGetComponent(entity : Entity) : Component*
     + Entities() : const vector<Entity>&
     + Size() : size_t
+    - GetComponentUnchecked(entity : Entity) : Component&
   }
 
   class "engine::ecs::Registry" as Registry {
