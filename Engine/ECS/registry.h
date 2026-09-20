@@ -237,11 +237,14 @@ class View {
   }
 
   [[nodiscard]] bool ContainsAll(Entity entity) const {
-    return std::apply(
-        [entity](const auto*... storages) {
-          return (storages->Contains(entity) && ...);
-        },
-        storages_);
+    return ContainsAllAfterDriver(
+        entity, std::make_index_sequence<sizeof...(Components) - 1U>{});
+  }
+
+  template <std::size_t... indices>
+  [[nodiscard]] bool ContainsAllAfterDriver(
+      Entity entity, std::index_sequence<indices...>) const {
+    return (std::get<indices + 1U>(storages_)->Contains(entity) && ...);
   }
 
   template <typename Function>
@@ -255,10 +258,12 @@ class View {
                             std::index_sequence<component_indices...>) {
     if constexpr (std::is_invocable_v<Function&, Entity, Components&...>) {
       std::invoke(function, entity,
-                  (*std::get<component_indices>(storages_)->TryGetComponent(entity))...);
+                  (*std::get<component_indices>(storages_)->TryGetComponent(
+                      entity))...);
     } else if constexpr (std::is_invocable_v<Function&, Components&...>) {
       std::invoke(function,
-                  (*std::get<component_indices>(storages_)->TryGetComponent(entity))...);
+                  (*std::get<component_indices>(storages_)->TryGetComponent(
+                      entity))...);
     } else {
       static_assert(kAlwaysFalse<Function>,
                     "View callback must accept (Entity, Components&...) or "
