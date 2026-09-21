@@ -66,10 +66,10 @@ glm::vec3 BoidSystem::CalculateAcceleration(
   std::size_t neighbor_count = 0U;
 
   constexpr float kMinDistanceSquared = 0.00000001F;
-  registry.CreateView<engine::renderer::Transform, Velocity, BoidParameters>()
-      .Each([&](engine::ecs::Entity other,
-                const engine::renderer::Transform& other_transform,
-                const Velocity& other_velocity, const BoidParameters&) {
+  registry.CreateView<engine::renderer::Transform, Velocity>().Each(
+      [&](engine::ecs::Entity other,
+          const engine::renderer::Transform& other_transform,
+          const Velocity& other_velocity) {
         if (other == self) {
           return;
         }

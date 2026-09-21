@@ -148,6 +148,21 @@ TEST_F(BoidSystemTest, CalculatesCohesionTowardNeighborPosition) {
                  {1.0F, 2.0F, 3.0F});
 }
 
+TEST_F(BoidSystemTest, IncludesEntityWithoutBoidParametersAsNeighbor) {
+  const engine::ecs::Entity self =
+      AddBoid({0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 0.0F},
+              MakeBoidParameters(0.0F, 0.0F, 1.0F));
+  const engine::ecs::Entity neighbor = registry_.Create();
+  registry_.Emplace<Transform>(neighbor,
+                               Transform{.position = {1.0F, 2.0F, 3.0F}});
+  registry_.Emplace<Velocity>(neighbor, Velocity{});
+
+  boid_system_.Update(registry_, 1.0F);
+
+  ExpectVec3Near(registry_.FindComponent<Acceleration>(self)->value,
+                 {1.0F, 2.0F, 3.0F});
+}
+
 TEST_F(BoidSystemTest, AvoidsNonFiniteAccelerationForOverlappingBoids) {
   const engine::ecs::Entity self =
       AddBoid({1.0F, 2.0F, 3.0F}, {1.0F, 0.0F, 0.0F},
