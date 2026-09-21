@@ -47,7 +47,7 @@ class MovementSystemTest : public testing::Test {
 TEST_F(MovementSystemTest, UpdatesPositionUsingVelocityAndDeltaTime) {
   movement_system_.Update(registry_, 2.0F);
 
-  ExpectVec3Near(registry_.GetComponent<Transform>(moving_entity_).position,
+  ExpectVec3Near(registry_.FindComponent<Transform>(moving_entity_)->position,
                  {2.0F, 5.0F, -1.0F});
 }
 
@@ -60,29 +60,31 @@ TEST_F(MovementSystemTest, UpdatesEveryEntityWithTransformAndVelocity) {
 
   movement_system_.Update(registry_, 0.5F);
 
-  ExpectVec3Near(registry_.GetComponent<Transform>(moving_entity_).position,
+  ExpectVec3Near(registry_.FindComponent<Transform>(moving_entity_)->position,
                  {1.25F, 2.75F, 2.0F});
-  ExpectVec3Near(registry_.GetComponent<Transform>(second_moving_entity).position,
+  ExpectVec3Near(
+      registry_.FindComponent<Transform>(second_moving_entity)->position,
                  {-0.5F, 3.0F, 8.5F});
 }
 
 TEST_F(MovementSystemTest, LeavesPositionUnchangedWhenVelocityIsMissing) {
   const glm::vec3 initial_position =
-      registry_.GetComponent<Transform>(transform_only_entity_).position;
+      registry_.FindComponent<Transform>(transform_only_entity_)->position;
 
   movement_system_.Update(registry_, 1.0F);
 
-  ExpectVec3Near(registry_.GetComponent<Transform>(transform_only_entity_).position,
+  ExpectVec3Near(
+      registry_.FindComponent<Transform>(transform_only_entity_)->position,
                  initial_position);
 }
 
 TEST_F(MovementSystemTest, LeavesPositionUnchangedWhenDeltaTimeIsZero) {
   const glm::vec3 initial_position =
-      registry_.GetComponent<Transform>(moving_entity_).position;
+      registry_.FindComponent<Transform>(moving_entity_)->position;
 
   movement_system_.Update(registry_, 0.0F);
 
-  ExpectVec3Near(registry_.GetComponent<Transform>(moving_entity_).position,
+  ExpectVec3Near(registry_.FindComponent<Transform>(moving_entity_)->position,
                  initial_position);
 }
 
@@ -94,7 +96,7 @@ TEST_F(MovementSystemTest, AccumulatesRepeatedFixedTimeSteps) {
     movement_system_.Update(registry_, kDeltaSeconds);
   }
 
-  ExpectVec3Near(registry_.GetComponent<Transform>(moving_entity_).position,
+  ExpectVec3Near(registry_.FindComponent<Transform>(moving_entity_)->position,
                  {1.5F, 3.5F, 1.0F});
 }
 
