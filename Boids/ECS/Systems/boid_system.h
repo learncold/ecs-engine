@@ -15,8 +15,11 @@ class BoidSystem final : public engine::ecs::System {
   void Update(engine::ecs::Registry& registry, float delta_seconds) override;
 
  private:
+  using NeighborView =
+      engine::ecs::View<engine::renderer::Transform, Velocity>;
+
   [[nodiscard]] glm::vec3 CalculateAcceleration(
-      engine::ecs::Registry& registry, engine::ecs::Entity self,
+      NeighborView& neighbor_view, engine::ecs::Entity self,
       const engine::renderer::Transform& self_transform,
       const Velocity& self_velocity,
       const BoidParameters& self_parameters) const;

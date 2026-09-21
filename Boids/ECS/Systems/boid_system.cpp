@@ -43,6 +43,9 @@ glm::vec3 CalculateAlignment(const glm::vec3& velocity_sum,
 
 void BoidSystem::Update(engine::ecs::Registry& registry,
                         float /* delta_seconds */) {
+  auto neighbor_view =
+      registry.CreateView<engine::renderer::Transform, Velocity>();
+
   registry
       .CreateView<engine::renderer::Transform, Velocity, BoidParameters,
                   Acceleration>()
@@ -50,13 +53,13 @@ void BoidSystem::Update(engine::ecs::Registry& registry,
                 const engine::renderer::Transform& transform,
                 const Velocity& velocity, const BoidParameters& parameters,
                 Acceleration& acceleration) {
-        acceleration.value = CalculateAcceleration(registry, entity, transform,
-                                                   velocity, parameters);
+        acceleration.value = CalculateAcceleration(
+            neighbor_view, entity, transform, velocity, parameters);
       });
 }
 
 glm::vec3 BoidSystem::CalculateAcceleration(
-    engine::ecs::Registry& registry, engine::ecs::Entity self,
+    NeighborView& neighbor_view, engine::ecs::Entity self,
     const engine::renderer::Transform& self_transform,
     const Velocity& self_velocity,
     const BoidParameters& self_parameters) const {
@@ -66,7 +69,7 @@ glm::vec3 BoidSystem::CalculateAcceleration(
   std::size_t neighbor_count = 0U;
 
   constexpr float kMinDistanceSquared = 0.00000001F;
-  registry.CreateView<engine::renderer::Transform, Velocity>().Each(
+  neighbor_view.Each(
       [&](engine::ecs::Entity other,
           const engine::renderer::Transform& other_transform,
           const Velocity& other_velocity) {
