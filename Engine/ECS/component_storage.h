@@ -9,6 +9,8 @@
 
 namespace engine::ecs {
 
+using DenseIndex = Entity::IdType;
+
 template <typename... Components>
 class View;
 
@@ -23,31 +25,36 @@ class IComponentStorage {
 template <typename Component>
 class ComponentStorage final : public IComponentStorage {
  public:
+  static constexpr DenseIndex kInvalidDenseIndex = Entity::kInvalidId;
+
   ComponentStorage() = default;
 
   template <typename... Args>
   Component& Emplace(Entity entity, Args&&... args) {
-    if (Contains(entity)) {
-      dense_components_[sparse_[entity.Value()]] =
+    const DenseIndex existing_index = FindDenseIndex(entity);
+    if (existing_index != kInvalidDenseIndex) {
+      dense_components_[existing_index] =
           Component{std::forward<Args>(args)...};
-      return dense_components_[sparse_[entity.Value()]];
+      return dense_components_[existing_index];
     }
 
     EnsureSparseSize(entity);
 
-    sparse_[entity.Value()] = dense_entities_.size();
+    sparse_[entity.Value()] =
+        static_cast<DenseIndex>(dense_entities_.size());
     dense_entities_.push_back(entity);
     dense_components_.push_back(Component{std::forward<Args>(args)...});
     return dense_components_.back();
   }
 
   void Remove(Entity entity) override {
-    if (!Contains(entity)) {
+    const DenseIndex removed_index = FindDenseIndex(entity);
+    if (removed_index == kInvalidDenseIndex) {
       return;
     }
 
-    const std::size_t removed_index = sparse_[entity.Value()];
-    const std::size_t last_index = dense_entities_.size() - 1U;
+    const DenseIndex last_index =
+        static_cast<DenseIndex>(dense_entities_.size() - 1U);
 
     if (removed_index != last_index) {
       dense_components_[removed_index] =
@@ -58,7 +65,7 @@ class ComponentStorage final : public IComponentStorage {
 
     dense_components_.pop_back();
     dense_entities_.pop_back();
-    sparse_[entity.Value()] = Entity::kInvalidId;
+    sparse_[entity.Value()] = kInvalidDenseIndex;
   }
 
   void Clear() override {
@@ -68,21 +75,35 @@ class ComponentStorage final : public IComponentStorage {
   }
 
   [[nodiscard]] bool Contains(Entity entity) const {
+    return FindDenseIndex(entity) != kInvalidDenseIndex;
+  }
+
+  [[nodiscard]] DenseIndex FindDenseIndex(Entity entity) const noexcept {
     const Entity::IdType entity_id = entity.Value();
-    return entity.IsValid() && entity_id < sparse_.size() &&
-           sparse_[entity_id] != Entity::kInvalidId &&
-           sparse_[entity_id] < dense_entities_.size() &&
-           dense_entities_[sparse_[entity_id]] == entity;
+    if (!entity.IsValid() || entity_id >= sparse_.size()) {
+      return kInvalidDenseIndex;
+    }
+
+    const DenseIndex dense_index = sparse_[entity_id];
+    if (dense_index == kInvalidDenseIndex ||
+        dense_index >= dense_entities_.size() ||
+        dense_entities_[dense_index] != entity) {
+      return kInvalidDenseIndex;
+    }
+
+    return dense_index;
   }
 
-  [[nodiscard]] Component* TryGetComponent(Entity entity) {
-    return Contains(entity) ? &dense_components_[sparse_[entity.Value()]]
-                            : nullptr;
+  [[nodiscard]] Component* FindComponent(Entity entity) noexcept {
+    const DenseIndex dense_index = FindDenseIndex(entity);
+    return dense_index != kInvalidDenseIndex ? &dense_components_[dense_index]
+                                             : nullptr;
   }
 
-  [[nodiscard]] const Component* TryGetComponent(Entity entity) const {
-    return Contains(entity) ? &dense_components_[sparse_[entity.Value()]]
-                            : nullptr;
+  [[nodiscard]] const Component* FindComponent(Entity entity) const noexcept {
+    const DenseIndex dense_index = FindDenseIndex(entity);
+    return dense_index != kInvalidDenseIndex ? &dense_components_[dense_index]
+                                             : nullptr;
   }
 
   [[nodiscard]] const std::vector<Entity>& Entities() const {
@@ -95,17 +116,6 @@ class ComponentStorage final : public IComponentStorage {
   template <typename... Components>
   friend class View;
 
-  // Precondition: entity exists in this storage, and the storage is not
-  // structurally modified between the membership check and this access.
-  [[nodiscard]] Component& GetComponentUnchecked(Entity entity) noexcept {
-    return dense_components_[sparse_[entity.Value()]];
-  }
-
-  [[nodiscard]] const Component& GetComponentUnchecked(
-      Entity entity) const noexcept {
-    return dense_components_[sparse_[entity.Value()]];
-  }
-
   // ensure sparse vector size for some entity
   void EnsureSparseSize(Entity entity) {
     if (!entity.IsValid()) {
@@ -116,11 +126,23 @@ class ComponentStorage final : public IComponentStorage {
     const std::size_t required_size =
         static_cast<std::size_t>(entity.Value()) + 1U;
     if (required_size > sparse_.size()) {
-      sparse_.resize(required_size, Entity::kInvalidId);
+      sparse_.resize(required_size, kInvalidDenseIndex);
     }
   }
 
-  std::vector<std::size_t> sparse_;
+  // Precondition: dense_index belongs to this storage and no structural
+  // modification has occurred since it was resolved.
+  [[nodiscard]] Component& ComponentAtDenseIndexUnchecked(
+      DenseIndex dense_index) noexcept {
+    return dense_components_[dense_index];
+  }
+
+  [[nodiscard]] const Component& ComponentAtDenseIndexUnchecked(
+      DenseIndex dense_index) const noexcept {
+    return dense_components_[dense_index];
+  }
+
+  std::vector<DenseIndex> sparse_;
   std::vector<Entity> dense_entities_;
   std::vector<Component> dense_components_;
 };

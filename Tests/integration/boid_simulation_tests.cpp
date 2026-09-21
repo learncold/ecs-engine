@@ -162,8 +162,10 @@ TEST(BoundarySystemTest, ClampsPositionAndReflectsOutwardVelocity) {
 
   boundary_system.Update(registry, 0.0F);
 
-  ExpectVec3Near(registry.GetComponent<Transform>(entity).position, {2.0F, -2.0F, 1.0F});
-  ExpectVec3Near(registry.GetComponent<Velocity>(entity).value, {-1.0F, 2.0F, 3.0F});
+  ExpectVec3Near(registry.FindComponent<Transform>(entity)->position,
+                 {2.0F, -2.0F, 1.0F});
+  ExpectVec3Near(registry.FindComponent<Velocity>(entity)->value,
+                 {-1.0F, 2.0F, 3.0F});
 }
 
 TEST(BoidSimulationTest, RejectsNegativeDeltaTime) {

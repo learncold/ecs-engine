@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -91,45 +92,15 @@ class Registry {
   }
 
   template <typename Component>
-  [[nodiscard]] Component& GetComponent(Entity entity) {
+  [[nodiscard]] Component* FindComponent(Entity entity) {
     auto* storage = FindStorage<Component>();
-    if (storage == nullptr) {
-      throw std::out_of_range("Requested component storage does not exist");
-    }
-
-    Component* component = storage->TryGetComponent(entity);
-    if (component == nullptr) {
-      throw std::out_of_range("Entity does not own requested component");
-    }
-
-    return *component;
+    return storage != nullptr ? storage->FindComponent(entity) : nullptr;
   }
 
   template <typename Component>
-  [[nodiscard]] const Component& GetComponent(Entity entity) const {
+  [[nodiscard]] const Component* FindComponent(Entity entity) const {
     const auto* storage = FindStorage<Component>();
-    if (storage == nullptr) {
-      throw std::out_of_range("Requested component storage does not exist");
-    }
-
-    const Component* component = storage->TryGetComponent(entity);
-    if (component == nullptr) {
-      throw std::out_of_range("Entity does not own requested component");
-    }
-
-    return *component;
-  }
-
-  template <typename Component>
-  [[nodiscard]] Component* TryGetComponent(Entity entity) {
-    auto* storage = FindStorage<Component>();
-    return storage != nullptr ? storage->TryGetComponent(entity) : nullptr;
-  }
-
-  template <typename Component>
-  [[nodiscard]] const Component* TryGetComponent(Entity entity) const {
-    const auto* storage = FindStorage<Component>();
-    return storage != nullptr ? storage->TryGetComponent(entity) : nullptr;
+    return storage != nullptr ? storage->FindComponent(entity) : nullptr;
   }
 
   template <typename... Components>
@@ -212,6 +183,10 @@ class View {
   static_assert(sizeof...(Components) > 0U,
                 "View requires at least one component type");
 
+  static constexpr std::size_t kComponentCount = sizeof...(Components);
+
+  using DenseIndices = std::array<DenseIndex, kComponentCount>;
+
  public:
   explicit View(Registry& registry)
       : storages_(registry.template FindStorage<Components>()...) {}
@@ -222,9 +197,18 @@ class View {
       return;
     }
 
-    for (Entity entity : DriverStorage().Entities()) {
-      if (ContainsAll(entity)) {
-        Invoke(function, entity);
+    auto& driver_storage = DriverStorage();
+    const auto& driver_entities = driver_storage.Entities();
+
+    for (DenseIndex driver_index = 0U; driver_index < driver_entities.size();
+         ++driver_index) {
+      const Entity entity = driver_entities[driver_index];
+
+      DenseIndices dense_indices{};
+      dense_indices[0U] = driver_index;
+
+      if (ContainsAll(entity, dense_indices)) {
+        Invoke(function, entity, dense_indices);
       }
     }
   }
@@ -246,34 +230,43 @@ class View {
     return *std::get<0U>(storages_);
   }
 
-  [[nodiscard]] bool ContainsAll(Entity entity) const {
+  [[nodiscard]] bool ContainsAll(Entity entity,
+                                 DenseIndices& dense_indices) const {
     return ContainsAllAfterDriver(
-        entity, std::make_index_sequence<sizeof...(Components) - 1U>{});
+        entity, dense_indices,
+        std::make_index_sequence<sizeof...(Components) - 1U>{});
   }
 
   template <std::size_t... indices>
   [[nodiscard]] bool ContainsAllAfterDriver(
-      Entity entity, std::index_sequence<indices...>) const {
-    return (std::get<indices + 1U>(storages_)->Contains(entity) && ...);
+      Entity entity, DenseIndices& dense_indices,
+      std::index_sequence<indices...>) const {
+    return (((dense_indices[indices + 1U] =
+                  std::get<indices + 1U>(storages_)->FindDenseIndex(entity)) !=
+             std::get<indices + 1U>(storages_)->kInvalidDenseIndex) &&
+            ...);
   }
 
   template <typename Function>
-  void Invoke(Function& function, Entity entity) {
-    InvokeWithComponents(function, entity,
+  void Invoke(Function& function, Entity entity,
+              const DenseIndices& dense_indices) {
+    InvokeWithComponents(function, entity, dense_indices,
                          std::index_sequence_for<Components...>{});
   }
 
   template <typename Function, std::size_t... component_indices>
   void InvokeWithComponents(Function& function, Entity entity,
+                            const DenseIndices& dense_indices,
                             std::index_sequence<component_indices...>) {
     if constexpr (std::is_invocable_v<Function&, Entity, Components&...>) {
       std::invoke(function, entity,
-                  (std::get<component_indices>(storages_)
-                       ->GetComponentUnchecked(entity))...);
+                  std::get<component_indices>(storages_)
+                      ->ComponentAtDenseIndexUnchecked(
+                          dense_indices[component_indices])...);
     } else if constexpr (std::is_invocable_v<Function&, Components&...>) {
-      std::invoke(function,
-                  (std::get<component_indices>(storages_)
-                       ->GetComponentUnchecked(entity))...);
+      std::invoke(function, std::get<component_indices>(storages_)
+                                ->ComponentAtDenseIndexUnchecked(
+                                    dense_indices[component_indices])...);
     } else {
       static_assert(kAlwaysFalse<Function>,
                     "View callback must accept (Entity, Components&...) or "
