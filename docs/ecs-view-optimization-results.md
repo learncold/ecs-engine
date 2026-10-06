@@ -16,6 +16,7 @@
 | Dense index 재사용 | `b274330` | 저장소별 dense index를 검사 시점에 수집하여 `Invoke()`에서 재사용하고, `DenseIndex`를 32비트 `Entity::IdType`으로 통일 |
 | 이웃 View 필터 축소 | `8aa5587` | 이웃 검색 View에서 사용하지 않는 `BoidParameters`를 제거하여 pair마다 수행하던 sparse 조회 한 번을 제거 |
 | 이웃 View 재사용 | `09aff4e` | 이웃 View를 업데이트마다 한 번 생성하여 Boid마다 반복하던 저장소 조회 제거 |
+| CachedView | 작업 트리 | 매칭 Entity의 저장소별 dense index를 캐시하여 반복 이웃 순회의 sparse 조회 제거 |
 
 ## 측정 환경과 조건
 
@@ -180,10 +181,47 @@ Boid마다 `O(1)`인 반면 이웃 순회는 `O(N²)`이므로 개체 수가 늘
 - 기존 컴포넌트의 값만 변경하는 것은 허용된다. 구조 변경이 `Each()` 호출 사이에
   일어났고 저장소 자체가 유지됐다면 다음 호출은 갱신된 dense 배열을 사용한다.
 
-`BoidSystem`의 이웃 View는 `Update()` 안의 지역 변수로만 재사용되고, 해당 순회
-중에는 `Transform`이나 `Velocity` 저장소의 구조를 변경하지 않는다. 따라서
-View가 Registry보다 오래 살거나 `Registry::Clear()`를 가로질러 사용되는 문제를
-피한다.
+일반 View를 사용하는 현재 시스템은 `Each()` 콜백 안에서 대상 저장소의 구조를
+변경하지 않는다. 반복 순회용 CachedView의 더 긴 수명과 무효화 규칙은 다음 절에
+별도로 기록한다.
+
+## CachedView dense index 캐시
+
+반복 이웃 순회에서 남아 있던 pair당 `Velocity` sparse 조회를 제거하기 위해
+`CachedView<Transform, Velocity>`를 추가했다. 일반 `View`가 저장소 포인터만
+보관하는 것과 달리 CachedView는 매칭 Entity와 각 저장소의 dense index를 한 번
+수집한다. 이후 `Each()`는 저장된 index로 dense component 배열에 직접 접근한다.
+
+BoidSystem은 이웃 CachedView를 프레임 간 재사용한다. 컴포넌트 값 변경은 현재
+dense index로 최신 값을 읽으므로 허용한다. 컴포넌트 추가·삭제, Entity 파괴,
+Registry 초기화는 저장소별 structural revision과 Registry storage epoch으로
+감지하며, 다음 업데이트 시작 시 캐시를 다시 구축한다.
+
+수정 전 `d88ef71`과 CachedView 작업 트리를 별도 Release 실행 파일로 빌드하고
+번갈아 8회씩 실행했다. 실행 순서는 매 반복마다 뒤집었으며 logical CPU affinity
+`0x2`, `AboveNormal` 우선순위를 적용했다. seed와 timestep, agent별 warmup 및
+측정 step은 위의 기존 조건과 같다. 캐시는 첫 warmup update에서 구축되므로 아래
+수치는 장기 실행의 steady-state 비용을 비교한다.
+
+| Agents | 조건 | Mean ms/step | Median ms/step | Min ms/step |
+|---:|---|---:|---:|---:|
+| 100 | 기존 View | 0.082396 | 0.081869 | 0.078820 |
+| 100 | CachedView | 0.062134 | 0.061863 | 0.058571 |
+| 500 | 기존 View | 1.386959 | 1.388124 | 1.322567 |
+| 500 | CachedView | 0.909590 | 0.889965 | 0.868300 |
+| 1,000 | 기존 View | 5.485404 | 5.484657 | 5.364691 |
+| 1,000 | CachedView | 3.720594 | 3.713090 | 3.600842 |
+
+| Agents | 평균 개선율 | 중앙값 개선율 | 최솟값 개선율 |
+|---:|---:|---:|---:|
+| 100 | 24.59% | **24.44%** | 25.69% |
+| 500 | 34.42% | **35.89%** | 34.35% |
+| 1,000 | 32.17% | **32.30%** | 32.88% |
+
+모든 agent 수에서 평균, 중앙값, 최솟값이 함께 개선됐다. 따라서 결과는 기존
+View 생성 비용이 아니라 naive all-pairs 내부 루프의 sparse-to-dense 조회가 실제
+병목 중 하나였다는 가설과 일치한다. 알고리즘 복잡도는 여전히 `O(N²)`이므로 다음
+주요 최적화 단계는 예정된 3D Grid 공간 분할이다.
 
 ## 채택하지 않은 후보: `DenseIndices` 0 초기화 제거
 

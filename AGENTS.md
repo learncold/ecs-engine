@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Implementation Checklist
+
+Use [GitHub issue #30](https://github.com/learncold/ecs-engine/issues/30) as the progress checklist for completing the project. Follow its ordered issues and verify each issue's completion criteria before marking it done.
+
 ## Project Overview
 
 This project is a graduation research project for building a C++ ECS-based lightweight game engine prototype and evaluating it through a 3D Boids swarm intelligence simulation.
@@ -24,8 +28,8 @@ Prioritize the submitted graduation project direction:
 - ECS architecture
 - Data-Oriented Design
 - 3D Boids swarm simulation
-- OOP vs ECS performance comparison
-- 3D Grid-based spatial partitioning optimization
+- OOP vs Sparse Set ECS vs Archetype ECS performance comparison
+- Single-threaded storage-layout and query-cost analysis
 - Quantitative performance measurement
 
 Do not shift the project toward unrelated gameplay features, asset tooling, or a broad commercial engine feature set unless they directly support the research goal.
@@ -215,9 +219,9 @@ Benchmark comparisons should separate simulation cost from rendering cost where 
 Required comparison paths:
 
 - OOP Boids implementation
-- ECS Boids implementation
+- Sparse Set ECS Boids implementation
+- Archetype ECS Boids implementation
 - Naive all-pairs neighbor search
-- 3D Grid-based spatial partitioning
 
 ## Coding Style
 
@@ -267,6 +271,6 @@ cmake --build --preset vs2022-debug
 
 ## Current Priority
 
-The next implementation priority is 3D Grid spatial partitioning for both the
-OOP and ECS Boids implementations, followed by reproducible benchmark runs and
-result analysis.
+The next implementation priority is integrating the Archetype Boids experiment,
+then adding reproducible benchmark runs and result analysis for OOP, Sparse Set
+ECS, and Archetype ECS.

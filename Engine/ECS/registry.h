@@ -21,6 +21,9 @@ namespace engine::ecs {
 template <typename... Components>
 class View;
 
+template <typename... Components>
+class CachedView;
+
 class Registry {
  public:
   Registry() = default;
@@ -108,7 +111,13 @@ class Registry {
     return View<Components...>(*this);
   }
 
+  template <typename... Components>
+  [[nodiscard]] CachedView<Components...> CreateCachedView() {
+    return CachedView<Components...>(*this);
+  }
+
   void Clear() {
+    ++storage_epoch_;
     component_storages_.clear();
     alive_entities_.clear();
     living_entity_count_ = 0U;
@@ -129,6 +138,7 @@ class Registry {
       auto inserted = component_storages_.emplace(
           type_key, std::make_unique<ComponentStorage<Component>>());
       storage_iterator = inserted.first;
+      ++storage_epoch_;
     }
 
     return static_cast<ComponentStorage<Component>&>(*storage_iterator->second);
@@ -173,9 +183,13 @@ class Registry {
   std::vector<Entity::IdType> free_entity_ids_;
   std::unordered_map<std::type_index, std::unique_ptr<IComponentStorage>>
       component_storages_;
+  std::uint64_t storage_epoch_ = 0U;
 
   template <typename... Components>
   friend class View;
+
+  template <typename... Components>
+  friend class CachedView;
 };
 
 template <typename... Components>
@@ -275,6 +289,165 @@ class View {
   }
 
   StorageTuple storages_;
+};
+
+// Snapshot view for queries that are iterated repeatedly. Component value
+// changes remain visible, but structural changes invalidate the cached dense
+// indices until Refresh() is called.
+template <typename... Components>
+class CachedView {
+  static_assert(sizeof...(Components) > 0U,
+                "CachedView requires at least one component type");
+
+  static constexpr std::size_t kComponentCount = sizeof...(Components);
+
+  using DenseIndices = std::array<DenseIndex, kComponentCount>;
+  using StructuralRevisions = std::array<std::uint64_t, kComponentCount>;
+
+  struct Entry {
+    Entity entity;
+    DenseIndices dense_indices;
+  };
+
+ public:
+  explicit CachedView(Registry& registry) { Refresh(registry); }
+
+  void Refresh(Registry& registry) {
+    registry_ = &registry;
+    storages_ = StorageTuple{registry.template FindStorage<Components>()...};
+    entries_.clear();
+    storage_epoch_ = registry.storage_epoch_;
+    structural_revisions_.fill(0U);
+
+    if (!HasRequiredStorages()) {
+      return;
+    }
+
+    auto& driver_storage = DriverStorage();
+    const auto& driver_entities = driver_storage.Entities();
+    entries_.reserve(driver_entities.size());
+
+    for (DenseIndex driver_index = 0U; driver_index < driver_entities.size();
+         ++driver_index) {
+      const Entity entity = driver_entities[driver_index];
+      DenseIndices dense_indices{};
+      dense_indices[0U] = driver_index;
+
+      if (ContainsAll(entity, dense_indices)) {
+        entries_.push_back(Entry{entity, dense_indices});
+      }
+    }
+
+    CaptureStructuralRevisions(std::index_sequence_for<Components...>{});
+  }
+
+  [[nodiscard]] bool IsCurrent(const Registry& registry) const noexcept {
+    if (registry_ != &registry || storage_epoch_ != registry.storage_epoch_) {
+      return false;
+    }
+
+    if (!HasRequiredStorages()) {
+      return true;
+    }
+
+    return StructuralRevisionsMatch(std::index_sequence_for<Components...>{});
+  }
+
+  [[nodiscard]] std::size_t Size() const noexcept { return entries_.size(); }
+
+  template <typename Function>
+  void Each(Function&& function) {
+    if (registry_ == nullptr || !IsCurrent(*registry_)) {
+      throw std::logic_error(
+          "CachedView was invalidated by a structural registry change");
+    }
+
+    for (const Entry& entry : entries_) {
+      Invoke(function, entry.entity, entry.dense_indices);
+    }
+  }
+
+ private:
+  template <typename>
+  static constexpr bool kAlwaysFalse = false;
+
+  using StorageTuple = std::tuple<ComponentStorage<Components>*...>;
+  using DriverComponent = std::tuple_element_t<0U, std::tuple<Components...>>;
+
+  [[nodiscard]] bool HasRequiredStorages() const noexcept {
+    return std::apply(
+        [](const auto*... storages) { return ((storages != nullptr) && ...); },
+        storages_);
+  }
+
+  [[nodiscard]] ComponentStorage<DriverComponent>& DriverStorage() {
+    return *std::get<0U>(storages_);
+  }
+
+  [[nodiscard]] bool ContainsAll(Entity entity,
+                                 DenseIndices& dense_indices) const {
+    return ContainsAllAfterDriver(
+        entity, dense_indices,
+        std::make_index_sequence<sizeof...(Components) - 1U>{});
+  }
+
+  template <std::size_t... indices>
+  [[nodiscard]] bool ContainsAllAfterDriver(
+      Entity entity, DenseIndices& dense_indices,
+      std::index_sequence<indices...>) const {
+    return (((dense_indices[indices + 1U] =
+                  std::get<indices + 1U>(storages_)->FindDenseIndex(entity)) !=
+             std::get<indices + 1U>(storages_)->kInvalidDenseIndex) &&
+            ...);
+  }
+
+  template <std::size_t... indices>
+  void CaptureStructuralRevisions(std::index_sequence<indices...>) noexcept {
+    ((structural_revisions_[indices] =
+          std::get<indices>(storages_)->StructuralRevision()),
+     ...);
+  }
+
+  template <std::size_t... indices>
+  [[nodiscard]] bool StructuralRevisionsMatch(
+      std::index_sequence<indices...>) const noexcept {
+    return ((structural_revisions_[indices] ==
+             std::get<indices>(storages_)->StructuralRevision()) &&
+            ...);
+  }
+
+  template <typename Function>
+  void Invoke(Function& function, Entity entity,
+              const DenseIndices& dense_indices) {
+    InvokeWithComponents(function, entity, dense_indices,
+                         std::index_sequence_for<Components...>{});
+  }
+
+  template <typename Function, std::size_t... component_indices>
+  void InvokeWithComponents(Function& function, Entity entity,
+                            const DenseIndices& dense_indices,
+                            std::index_sequence<component_indices...>) {
+    if constexpr (std::is_invocable_v<Function&, Entity, Components&...>) {
+      std::invoke(function, entity,
+                  std::get<component_indices>(storages_)
+                      ->ComponentAtDenseIndexUnchecked(
+                          dense_indices[component_indices])...);
+    } else if constexpr (std::is_invocable_v<Function&, Components&...>) {
+      std::invoke(function, std::get<component_indices>(storages_)
+                                ->ComponentAtDenseIndexUnchecked(
+                                    dense_indices[component_indices])...);
+    } else {
+      static_assert(kAlwaysFalse<Function>,
+                    "CachedView callback must accept (Entity, Components&...) "
+                    "or (Components&...)");
+    }
+  }
+
+  Registry* registry_ = nullptr;
+  StorageTuple storages_{};
+  std::vector<Entry> entries_;
+  StructuralRevisions structural_revisions_{};
+  std::uint64_t storage_epoch_ = 0U;
 };
 
 }  // namespace engine::ecs

@@ -163,6 +163,22 @@ TEST_F(BoidSystemTest, IncludesEntityWithoutBoidParametersAsNeighbor) {
                  {1.0F, 2.0F, 3.0F});
 }
 
+TEST_F(BoidSystemTest, RefreshesNeighborCacheAfterStructuralChange) {
+  const engine::ecs::Entity self =
+      AddBoid({0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 0.0F},
+              MakeBoidParameters(0.0F, 0.0F, 1.0F));
+  boid_system_.Update(registry_, 1.0F);
+  ExpectVec3Near(registry_.FindComponent<Acceleration>(self)->value,
+                 {0.0F, 0.0F, 0.0F});
+
+  AddBoid({1.0F, 2.0F, 3.0F}, {0.0F, 0.0F, 0.0F},
+          MakeBoidParameters(0.0F, 0.0F, 1.0F));
+  boid_system_.Update(registry_, 1.0F);
+
+  ExpectVec3Near(registry_.FindComponent<Acceleration>(self)->value,
+                 {1.0F, 2.0F, 3.0F});
+}
+
 TEST_F(BoidSystemTest, AvoidsNonFiniteAccelerationForOverlappingBoids) {
   const engine::ecs::Entity self =
       AddBoid({1.0F, 2.0F, 3.0F}, {1.0F, 0.0F, 0.0F},

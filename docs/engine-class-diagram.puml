@@ -110,10 +110,18 @@ package "engine::ecs" {
     + Has<Component>(entity) : bool
     + FindComponent<Component>(entity) : Component*
     + CreateView<Components...>() : View
+    + CreateCachedView<Components...>() : CachedView
     + Clear() : void
   }
 
   class "engine::ecs::View<Components...>" as View <<template>> {
+    + Each(function) : void
+  }
+
+  class "engine::ecs::CachedView<Components...>" as CachedView <<template>> {
+    + Refresh(registry : Registry&) : void
+    + IsCurrent(registry : Registry&) : bool
+    + Size() : size_t
     + Each(function) : void
   }
 
@@ -228,7 +236,9 @@ ComponentStorage o-- "0..*" Entity : dense entities
 Registry *-- "0..*" IComponentStorage : owns by component type
 Registry ..> Entity : creates and validates
 Registry ..> View : creates
+Registry ..> CachedView : creates
 View --> ComponentStorage : iterates matching storage
+CachedView --> ComponentStorage : caches dense indices
 SystemManager *-- "0..*" System : owns ordered systems
 SystemManager ..> Registry : updates
 System ..> Registry : operates on

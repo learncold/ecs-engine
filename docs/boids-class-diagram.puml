@@ -29,8 +29,11 @@ package "Engine dependencies" #EEF3F8 {
     + Create() : Entity
     + Emplace<Component>(entity, args...) : Component&
     + CreateView<Components...>() : View
+    + CreateCachedView<Components...>() : CachedView
     + Clear() : void
   }
+
+  class "engine::ecs::CachedView<Components...>" as CachedView <<template>>
 
   class "engine::ecs::Entity" as Entity <<value>>
 
@@ -86,7 +89,8 @@ package "boids::ecs::systems" {
   class "boids::ecs::BoidSystem" as BoidSystem {
     + Update(registry, delta_seconds) : void
     --
-    - CalculateAcceleration(registry, self, transform, velocity, parameters) : glm::vec3
+    - CalculateAcceleration(neighbor_view, self, transform, velocity, parameters) : glm::vec3
+    - neighbor_view_ : optional<CachedView<Transform, Velocity>>
   }
 
   class "boids::ecs::MovementSystem" as MovementSystem {
@@ -151,6 +155,7 @@ BoidSystem ..> Transform : reads positions
 BoidSystem ..> Velocity : reads velocities
 BoidSystem ..> BoidParameters : reads rules
 BoidSystem ..> Acceleration : writes steering
+BoidSystem *-- CachedView : caches neighbors
 
 MovementSystem ..> Acceleration : reads
 MovementSystem ..> BoidParameters : reads max speed
