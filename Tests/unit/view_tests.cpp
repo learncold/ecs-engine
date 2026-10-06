@@ -179,12 +179,22 @@ TEST_F(ViewTest, CachedViewDetectsRegistryClear) {
   const auto new_entity = registry_.Create();
   registry_.Emplace<Transform>(new_entity, Transform{4.0F, 5.0F, 6.0F});
   registry_.Emplace<Velocity>(new_entity, Velocity{7.0F, 8.0F, 9.0F});
+  const auto second_new_entity = registry_.Create();
+  registry_.Emplace<Transform>(second_new_entity, Transform{});
+  registry_.Emplace<Velocity>(second_new_entity, Velocity{});
+  EXPECT_FALSE(view.IsCurrent(registry_));
+  EXPECT_THROW(view.Each([](Transform&, Velocity&) {}), std::logic_error);
   view.Refresh(registry_);
 
-  ASSERT_EQ(view.Size(), 1U);
+  EXPECT_TRUE(view.IsCurrent(registry_));
+  ASSERT_EQ(view.Size(), 2U);
+  int callback_count = 0;
   view.Each([&](engine::ecs::Entity entity, Transform&, Velocity&) {
-    EXPECT_EQ(entity, new_entity);
+    EXPECT_TRUE(entity == new_entity || entity == second_new_entity);
+    EXPECT_TRUE(registry_.IsAlive(entity));
+    ++callback_count;
   });
+  EXPECT_EQ(callback_count, 2);
 }
 
 }  // namespace
