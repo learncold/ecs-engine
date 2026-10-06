@@ -39,7 +39,7 @@ CMake 타깃은 프로젝트 루트를 헤더 검색 경로로 사용하므로
 - `Core`: 애플리케이션 수명과 메인 루프
 - `Input`: GLFW 입력을 엔진 입력 상태로 변환
 - `DebugUI`: Dear ImGui 백엔드 수명과 프레임 처리
-- `ECS`: Entity, Component 저장소, View, System 실행
+- `ECS`: Entity, Component 저장소, View/CachedView, System 실행
 - `Renderer`: 공통 `Transform`, `MeshRenderer`, Model 행렬 변환, 카메라,
   Orbit 조작, Grid/경계선, Instanced Agent 렌더링
 - `ECSRenderer`: ECS View를 공통 Renderer 입력으로 바꾸는 어댑터
@@ -54,6 +54,13 @@ CMake 타깃은 프로젝트 루트를 헤더 검색 경로로 사용하므로
 반환하며, App이 구현명, 실행 조건과 결과를 출력한다. 시뮬레이션 초기화와 수명은
 App이 관리한다. 두 구현 모두 방향 갱신까지 포함하지만 렌더 데이터 추출과 GPU
 호출은 실행하지 않는다. 옵션 없는 실행은 기존 ECS Application 루프를 사용한다.
+
+일반 `View`는 컴포넌트 저장소 포인터만 보관하고 순회할 때마다 매칭 Entity의
+dense index를 찾는다. `CachedView`는 반복 순회를 위해 매칭 Entity와 저장소별
+dense index를 미리 저장한다. 컴포넌트 값 변경은 캐시를 무효화하지 않지만,
+컴포넌트 추가·삭제와 Entity 파괴 같은 구조 변경은 저장소 revision으로 감지하여
+명시적으로 캐시를 갱신한다. BoidSystem은 `Transform + Velocity` 이웃 캐시를
+프레임 간 재사용하고 구조가 바뀐 경우에만 다시 구축한다.
 
 `Transform`은 position, rotation quaternion, 균일 scale을 가진다. Model 행렬은
 `Translation × Rotation × Scale` 순서로 만든다. 렌더링 포함 여부는 별도 visible

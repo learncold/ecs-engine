@@ -35,8 +35,8 @@ Boids 시뮬레이션은 별도의 단독 계산 프로그램이 아니라, 위 
 - 3D 공간 기반 Boids 군집 시뮬레이션
 - 단순 3D 에이전트 렌더링
 - Instanced rendering을 통한 대량 에이전트 시각화
-- OOP 방식과 ECS 방식의 성능 비교
-- Grid 기반 공간 분할 최적화 비교
+- OOP, Sparse Set ECS와 Archetype ECS의 성능 비교
+- 동일한 naive all-pairs 이웃 탐색을 사용한 저장 구조 비교
 
 범위 밖 항목:
 
@@ -112,7 +112,7 @@ cmake --build --preset vs2022-release
 측정값은 CPU 사용 시간이 아닌 실제 경과 시간으로, 스케줄링 지연과 콜백 호출
 비용을 포함합니다. 반복 호출 시 Benchmarker가 시뮬레이션을 초기화하지는 않습니다.
 
-Grid 구현, CSV 저장, 자동 반복 실험과 CPU·메모리·캐시 분석은 후속 범위입니다.
+Archetype 통합, CSV 저장, 자동 반복 실험과 CPU·메모리·캐시 분석은 후속 범위입니다.
 실행 파일은 시각화 모드와 공유하므로 기존 그래픽 라이브러리 빌드/배포 의존성은
 유지되지만, `Engine::Benchmark` 타깃 자체는 표준 C++ 라이브러리만 사용합니다.
 

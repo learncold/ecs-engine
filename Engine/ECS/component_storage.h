@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -13,6 +14,9 @@ using DenseIndex = Entity::IdType;
 
 template <typename... Components>
 class View;
+
+template <typename... Components>
+class CachedView;
 
 class IComponentStorage {
  public:
@@ -44,6 +48,7 @@ class ComponentStorage final : public IComponentStorage {
         static_cast<DenseIndex>(dense_entities_.size());
     dense_entities_.push_back(entity);
     dense_components_.push_back(Component{std::forward<Args>(args)...});
+    ++structural_revision_;
     return dense_components_.back();
   }
 
@@ -66,9 +71,13 @@ class ComponentStorage final : public IComponentStorage {
     dense_components_.pop_back();
     dense_entities_.pop_back();
     sparse_[entity.Value()] = kInvalidDenseIndex;
+    ++structural_revision_;
   }
 
   void Clear() override {
+    if (!dense_entities_.empty()) {
+      ++structural_revision_;
+    }
     sparse_.clear();
     dense_entities_.clear();
     dense_components_.clear();
@@ -116,6 +125,9 @@ class ComponentStorage final : public IComponentStorage {
   template <typename... Components>
   friend class View;
 
+  template <typename... Components>
+  friend class CachedView;
+
   // ensure sparse vector size for some entity
   void EnsureSparseSize(Entity entity) {
     if (!entity.IsValid()) {
@@ -142,9 +154,14 @@ class ComponentStorage final : public IComponentStorage {
     return dense_components_[dense_index];
   }
 
+  [[nodiscard]] std::uint64_t StructuralRevision() const noexcept {
+    return structural_revision_;
+  }
+
   std::vector<DenseIndex> sparse_;
   std::vector<Entity> dense_entities_;
   std::vector<Component> dense_components_;
+  std::uint64_t structural_revision_ = 0U;
 };
 
 }  // namespace engine::ecs

@@ -2,39 +2,44 @@
 
 ## 연구 주제
 
-ECS 기반 게임 엔진 프로토타입에서 3D Boids 군집 시뮬레이션을 구현하고, OOP 방식과 ECS 방식의 성능 차이를 정량적으로 비교 분석한다.
+경량 게임 엔진 프로토타입의 3D Boids 시뮬레이션에서 OOP, Sparse Set ECS와
+Archetype ECS의 성능 및 메모리 특성을 정량적으로 비교한다.
 
 ## 연구 배경
 
-현대 게임과 시뮬레이션은 다수의 객체를 실시간으로 갱신하고 렌더링해야 한다. 기존 OOP 방식은 객체가 개별 인스턴스로 관리되기 때문에 메모리 접근이 분산될 수 있고, 대규모 객체 처리에서 캐시 효율 저하와 갱신 비용 증가가 발생할 수 있다.
+ECS(Entity-Component-System)의 성능은 ECS라는 이름 자체보다 컴포넌트 저장
+방식과 반복 접근 방식에 크게 좌우된다. Sparse Set은 유연한 컴포넌트 추가와
+삭제에 적합하지만 반복 쿼리에서 sparse/dense index 조회 비용이 발생할 수 있다.
+Archetype은 같은 컴포넌트 조합을 가진 개체를 column 단위로 저장해 직접 순회할
+수 있지만, 구조 변경 비용과 구현 복잡도가 존재한다. 연속 객체 배열을 사용하는
+OOP도 동종 데이터 처리에서는 높은 지역성을 가질 수 있다.
 
-ECS(Entity-Component-System) 아키텍처는 Entity를 식별자 중심으로 관리하고, Component 데이터를 타입별로 분리하여 System이 필요한 데이터만 순차적으로 처리하도록 설계한다. 이러한 구조는 데이터 지향 설계(Data-Oriented Design)와 결합했을 때 대량 객체 처리에 유리한 구조를 제공할 수 있다.
-
-본 연구는 이러한 ECS 구조의 효과를 게임 엔진 환경에서 검증하기 위해, 다수의 에이전트가 3D 공간에서 상호작용하는 Boids 군집 시뮬레이션을 구현하고 OOP 방식과 ECS 방식의 성능을 비교한다.
-
-본 연구에서 구현하는 엔진은 범용 3D 게임 엔진이 아니라, 대규모 군집 지능 시뮬레이션을 수행하고 시각화하기 위한 경량 게임 엔진 프로토타입이다. 여기서 게임 엔진은 실시간 루프, 입력 처리, 시간 관리, ECS 기반 객체 관리, 렌더링, 시뮬레이션 갱신, 성능 측정 기능을 포함하는 최소 런타임 계층으로 정의한다.
+본 연구는 동일한 단일 스레드 3D Boids workload를 세 저장 구조로 구현한다.
+알고리즘과 초기 상태를 통제한 뒤 update 시간, phase별 시간, 초기화 시간과
+메모리 사용량을 측정해 관측된 차이를 저장 구조와 접근 비용으로 설명한다.
 
 ## 연구 목표
 
-1. C++ 기반 ECS 게임 엔진 코어를 설계 및 구현한다.
-2. Boids 알고리즘을 이용한 3D 군집 지능 시뮬레이션을 구현한다.
-3. 동일한 군집 시뮬레이션을 OOP 방식과 ECS 방식으로 각각 구현한다.
-4. 에이전트 수 증가에 따른 성능 변화를 측정한다.
-5. 공간 분할 최적화 적용 전후의 성능 차이를 분석한다.
+1. OOP, Sparse Set ECS와 Archetype ECS로 동일한 3D Boids를 구현한다.
+2. 에이전트 수에 따른 세 구현의 simulation update 성능을 비교한다.
+3. Sparse Set의 query/index 비용과 Archetype의 직접 column 순회 효과를 분석한다.
+4. 세 구현의 초기화 시간과 메모리 사용량을 비교한다.
 
 ## 핵심 연구 질문
 
-### RQ1. ECS 구조는 다수의 군집 에이전트 상태를 효율적으로 관리할 수 있는가?
+### RQ1. 세 저장 구조의 update 성능은 개체 수에 따라 어떻게 달라지는가?
 
-에이전트 수가 증가할 때 ECS 방식의 갱신 비용, 프레임 시간, 메모리 사용량이 OOP 방식과 비교해 어떤 차이를 보이는지 분석한다.
+동일한 naive all-pairs Boids에서 OOP, Sparse Set ECS와 Archetype ECS의 전체 및
+phase별 update 시간을 비교한다.
 
-### RQ2. Boids 알고리즘은 ECS 구조에서 어떤 방식으로 분리 및 확장될 수 있는가?
+### RQ2. 저장 구조와 반복 접근 방식은 관측된 성능 차이를 어떻게 설명하는가?
 
-Boids의 Separation, Alignment, Cohesion 규칙을 Component와 System 구조로 표현하고, 기능 확장과 유지보수 측면에서 ECS 구조가 가지는 장점을 분석한다.
+Sparse Set의 sparse/dense 간접 접근과 Archetype의 직접 column 순회를 비교한다.
 
-### RQ3. 공간 분할 최적화는 군집 시뮬레이션 성능에 어떤 영향을 주는가?
+### RQ3. 세 저장 구조의 초기화 시간과 메모리 비용은 어떻게 다른가?
 
-모든 에이전트 간 거리를 비교하는 단순 방식과 3D Grid 기반 공간 분할 방식을 비교하여, 이웃 탐색 비용 감소가 전체 성능에 미치는 영향을 측정한다.
+프로세스 메모리와 컨테이너 기반 저장량을 구분해 측정하고 bytes per entity를
+비교한다.
 
 ## 구현 범위
 
@@ -76,19 +81,20 @@ Boids 시뮬레이션은 이 엔진 런타임 위에서 실행되는 검증용 �
 - Boid Component
 - Boid System
 - Movement System
-- 3D 공간 분할 Grid
 
 ### 비교 구현
 
-- OOP 기반 Boid 객체 배열 구현
-- ECS 기반 Component/System 구현
-- 동일한 조건에서 에이전트 수별 성능 비교
+- 연속 `std::vector<BoidObject>` 기반 OOP
+- 반복 순회 경로가 최적화된 Sparse Set ECS
+- 동일 컴포넌트 조합을 column으로 저장하는 Archetype ECS
+- 세 구현에 동일한 초기 상태, update 순서와 naive all-pairs 이웃 탐색 적용
 
 ## 실험 설계
 
-### 실험 1. 에이전트 수에 따른 OOP/ECS 성능 비교
+### 실험 1. 에이전트 수에 따른 저장 구조 성능 비교
 
-에이전트 수를 단계적으로 증가시키며 OOP 방식과 ECS 방식의 성능을 측정한다.
+에이전트 수를 단계적으로 증가시키며 OOP, Sparse Set ECS와 Archetype ECS의
+성능을 측정한다.
 
 예상 실험 규모:
 
@@ -97,57 +103,36 @@ Boids 시뮬레이션은 이 엔진 런타임 위에서 실행되는 검증용 �
 500 agents
 1,000 agents
 3,000 agents
-5,000 agents
-10,000 agents
+5,000 agents (실행 시간이 허용할 때 확장)
 ```
 
 측정 지표:
 
-- FPS
-- Frame time
-- Simulation update time
-- Rendering time
-- Memory usage
+- 전체 simulation update time
+- 이웃 계산, 이동, 경계 처리와 방향 갱신의 phase별 시간
+- updates per second
+- 초기화 시간
+- memory usage 및 bytes per entity
 
-### 실험 2. 공간 분할 최적화 전후 비교
+### 실험 2. Phase별 실행 비용 비교
 
-Boids 알고리즘의 이웃 탐색 방식을 비교한다.
+이웃 계산, 이동, 경계 처리와 방향 갱신 시간을 구분하여 저장 구조에 따른 차이가
+어느 처리 단계에서 발생하는지 분석한다.
 
-비교 대상:
+### 실험 3. 초기화 및 메모리 비교
 
-- 전체 에이전트 비교 방식
-- 3D Grid 기반 공간 분할 방식
-
-측정 지표:
-
-- Boid System update time
-- 에이전트 수 증가에 따른 시간 복잡도 경향
-- 실시간 처리 가능한 최대 에이전트 수
-
-### 실험 3. Boids 파라미터 변화에 따른 군집 행동 분석
-
-Boids 규칙의 가중치를 조정하여 군집 행동 변화를 관찰한다.
-
-분석 대상:
-
-- Separation 가중치 증가
-- Alignment 가중치 증가
-- Cohesion 가중치 증가
-- 시야 반경 변화
-
-3D 시뮬레이션에서는 각 규칙이 x, y, z 축으로 확장되며, 에이전트의 위치와 속도는 3차원 벡터로 관리한다.
-
-이 실험은 성능보다 군집 지능 동작의 타당성을 확인하기 위한 보조 실험으로 사용한다.
+세 구현의 초기화 시간, 프로세스 메모리와 컨테이너 size/capacity 기반 저장량을
+측정한다. 프로세스 메모리에 포함되는 allocator와 런타임 비용을 별도로 명시한다.
 
 ## 성능 지표 정의
 
 | 지표 | 설명 |
 | --- | --- |
-| FPS | 초당 렌더링 프레임 수 |
-| Frame time | 한 프레임을 처리하는 데 걸린 전체 시간 |
-| Simulation update time | Boids 및 Movement System 갱신 시간 |
-| Rendering time | 에이전트 렌더링에 사용된 시간 |
-| Memory usage | 프로세스 또는 시뮬레이션 데이터 구조의 메모리 사용량 |
+| Simulation update time | 한 simulation step 전체의 경과 시간 |
+| Phase time | 이웃 계산, 이동, 경계 처리와 방향 갱신 구간별 시간 |
+| Updates per second | 단위 시간당 완료한 simulation step 수 |
+| Initialization time | N개 개체와 컴포넌트를 생성하는 시간 |
+| Memory usage | 프로세스 및 시뮬레이션 컨테이너의 메모리 사용량 |
 
 ## 우선순위
 
@@ -155,36 +140,9 @@ Boids 규칙의 가중치를 조정하여 군집 행동 변화를 관찰한다.
 
 1. ECS 엔진 코어 구현
 2. Boids 군집 시뮬레이션 구현
-3. OOP 방식과 ECS 방식의 성능 비교
-4. 에이전트 수별 FPS 및 update time 측정
+3. OOP, Sparse Set ECS와 Archetype ECS의 성능 비교
+4. 에이전트 수별 update time과 메모리 측정
 5. 논문용 그래프와 표 생성
-
-### 권장 목표
-
-1. 3D Grid 기반 공간 분할 최적화
-2. Instanced Rendering 적용
-3. 실시간 파라미터 조정 UI
-4. 메모리 사용량 측정
-
-### 확장 목표
-
-1. Job System 기반 병렬 처리
-2. 캐시 히트율 또는 cache miss 측정
-3. Archetype 기반 ECS 구조 고도화
-
-확장 목표는 시간 여유가 있을 때만 진행한다. 졸업논문의 핵심 평가는 ECS 구조와 OOP 구조의 비교, Boids 시뮬레이션 구현, 정량적 성능 분석에 둔다.
-
-## 제외 범위
-
-본 연구는 ECS와 DOD의 성능 검증에 초점을 둔다. 따라서 다음 항목은 초기 구현 범위에서 제외한다.
-
-- 범용 3D 모델 로딩
-- PBR 및 고급 조명 시스템
-- 스켈레탈 애니메이션
-- 물리 엔진
-- 씬 에디터
-- 범용 게임 제작 도구
-- 상용 게임 엔진 수준의 에셋 파이프라인
 
 ## 논문 결론에서 보여줄 핵심
 
@@ -194,6 +152,6 @@ Boids 규칙의 가중치를 조정하여 군집 행동 변화를 관찰한다.
 
 - 실행 가능한 ECS 기반 3D 시뮬레이션 엔진 프로토타입
 - 3D Boids 군집 시뮬레이션 데모
-- OOP 방식과 ECS 방식의 비교 실험 결과
+- OOP, Sparse Set ECS와 Archetype ECS의 비교 실험 결과
 - 에이전트 수 증가에 따른 성능 그래프
-- 3D 공간 분할 최적화 적용 전후 비교 결과
+- 전체/phase별 update 시간과 메모리 비교 결과
