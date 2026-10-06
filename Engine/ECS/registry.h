@@ -39,7 +39,10 @@ class Registry {
       const std::size_t required_size =
           static_cast<std::size_t>(entity_id) + 1U;
       alive_entities_.resize(required_size, std::uint8_t{0});
-      generations_.resize(required_size, 0U);
+      // Keep generation history for IDs not yet recreated after Clear().
+      if (generations_.size() < required_size) {
+        generations_.resize(required_size, 0U);
+      }
     }
 
     alive_entities_[entity_id] = std::uint8_t{1};

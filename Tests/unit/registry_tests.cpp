@@ -328,4 +328,80 @@ TEST_F(RegistryTest, ClearRemovesAllEntitiesAndComponentTypes) {
   EXPECT_FALSE(registry_.Has<OtherComponent>(second_entity));
 }
 
+TEST_F(RegistryTest, NeverRevivesStaleHandlesAcrossRepeatedClearAndRecreation) {
+  std::vector<engine::ecs::Entity> stale_entities;
+  std::vector<engine::ecs::Entity> current_entities;
+  const engine::ecs::Registry& const_registry = registry_;
+
+  // Include partial recreation followed by growth to exercise retained IDs.
+  for (const int entity_count : {2, 2, 1, 4, 2, 4}) {
+    SCOPED_TRACE(entity_count);
+    stale_entities.insert(stale_entities.end(), current_entities.begin(),
+                          current_entities.end());
+    registry_.Clear();
+    current_entities.clear();
+    EXPECT_EQ(registry_.EntityCount(), 0U);
+
+    for (const auto stale_entity : stale_entities) {
+      EXPECT_FALSE(registry_.IsAlive(stale_entity));
+      EXPECT_EQ(registry_.FindComponent<TestComponent>(stale_entity), nullptr);
+    }
+
+    for (int index = 0; index < entity_count; ++index) {
+      const auto entity = registry_.Create();
+      registry_.Emplace<TestComponent>(entity, index + 10);
+      current_entities.push_back(entity);
+    }
+
+    for (const auto stale_entity : stale_entities) {
+      SCOPED_TRACE(testing::Message() << "Stale ID: " << stale_entity.Value()
+                                     << ", generation: "
+                                     << stale_entity.Generation());
+      EXPECT_FALSE(registry_.IsAlive(stale_entity));
+      EXPECT_FALSE(registry_.Has<TestComponent>(stale_entity));
+      EXPECT_EQ(registry_.FindComponent<TestComponent>(stale_entity), nullptr);
+      EXPECT_EQ(const_registry.FindComponent<TestComponent>(stale_entity),
+                nullptr);
+      EXPECT_THROW(registry_.Emplace<TestComponent>(stale_entity, -1),
+                   std::invalid_argument);
+      registry_.Remove<TestComponent>(stale_entity);
+      registry_.Destroy(stale_entity);
+    }
+
+    EXPECT_EQ(registry_.EntityCount(), current_entities.size());
+    for (int index = 0; index < entity_count; ++index) {
+      const auto entity = current_entities[index];
+      EXPECT_TRUE(registry_.IsAlive(entity));
+      ASSERT_NE(registry_.FindComponent<TestComponent>(entity), nullptr);
+      EXPECT_EQ(registry_.FindComponent<TestComponent>(entity)->value,
+                index + 10);
+    }
+  }
+}
+
+TEST_F(RegistryTest, PreservesDestroyAndIdReuseAfterClear) {
+  const auto old_first = registry_.Create();
+  const auto old_second = registry_.Create();
+  registry_.Clear();
+  const auto first = registry_.Create();
+  const auto second = registry_.Create();
+
+  registry_.Destroy(second);
+  const auto reused = registry_.Create();
+  registry_.Emplace<TestComponent>(reused, 42);
+
+  EXPECT_EQ(reused.Value(), second.Value());
+  EXPECT_NE(reused.Generation(), second.Generation());
+  for (const auto stale_entity : {old_first, old_second, second}) {
+    EXPECT_FALSE(registry_.IsAlive(stale_entity));
+    EXPECT_EQ(registry_.FindComponent<TestComponent>(stale_entity), nullptr);
+    registry_.Destroy(stale_entity);
+  }
+  EXPECT_TRUE(registry_.IsAlive(first));
+  EXPECT_TRUE(registry_.IsAlive(reused));
+  EXPECT_EQ(registry_.EntityCount(), 2U);
+  ASSERT_NE(registry_.FindComponent<TestComponent>(reused), nullptr);
+  EXPECT_EQ(registry_.FindComponent<TestComponent>(reused)->value, 42);
+}
+
 }  // namespace
