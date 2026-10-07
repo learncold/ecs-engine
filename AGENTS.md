@@ -250,6 +250,7 @@ Do not commit generated build output.
 Follow the repository's recent commit and pull request convention:
 
 - Write concise English Conventional Commit subjects such as `feat: add simulation benchmark`. Do not include `codex` in commit messages.
+- Do not include `codex` anywhere in branch names, including as a prefix.
 - Use the commit subject as the pull request title when one commit represents the feature.
 - For work that completes a GitHub issue, ignore the pull request template and use only `Closes #<issue-number>` as the pull request body unless the user requests additional detail.
 - Check the latest relevant commits and merged pull requests before committing so the wording remains consistent with current repository history.
