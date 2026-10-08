@@ -359,6 +359,10 @@ class CachedView {
   [[nodiscard]] std::size_t Size() const noexcept { return entries_.size(); }
 
   template <typename Function>
+  // Expose the neighbor loop to the optimizer while retaining validity checks.
+#if defined(_MSC_VER)
+  __forceinline
+#endif
   void Each(Function&& function) {
     if (registry_ == nullptr || !IsCurrent(*registry_)) {
       throw std::logic_error(
