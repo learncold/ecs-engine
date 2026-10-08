@@ -197,4 +197,67 @@ TEST_F(ViewTest, CachedViewDetectsRegistryClear) {
   EXPECT_EQ(callback_count, 2);
 }
 
+TEST_F(ViewTest, CachedViewRefreshesAfterExplicitComponentRemoval) {
+  auto view = registry_.CreateCachedView<Transform, Velocity>();
+  ASSERT_EQ(view.Size(), 1U);
+
+  registry_.Remove<Velocity>(moving_entity_);
+  EXPECT_TRUE(registry_.IsAlive(moving_entity_));
+  EXPECT_FALSE(view.IsCurrent(registry_));
+  int callback_count = 0;
+  EXPECT_THROW(view.Each([&](Transform&, Velocity&) { ++callback_count; }),
+               std::logic_error);
+  EXPECT_EQ(callback_count, 0);
+
+  view.Refresh(registry_);
+  EXPECT_TRUE(view.IsCurrent(registry_));
+  EXPECT_EQ(view.Size(), 0U);
+  view.Each([&](Transform&, Velocity&) { ++callback_count; });
+  EXPECT_EQ(callback_count, 0);
+
+  registry_.Emplace<Velocity>(moving_entity_, Velocity{7.0F, 8.0F, 9.0F});
+  EXPECT_FALSE(view.IsCurrent(registry_));
+  view.Refresh(registry_);
+  ASSERT_EQ(view.Size(), 1U);
+  view.Each([&](engine::ecs::Entity entity, const Transform& transform,
+                const Velocity& velocity) {
+    EXPECT_EQ(entity, moving_entity_);
+    EXPECT_FLOAT_EQ(transform.x, 1.0F);
+    EXPECT_FLOAT_EQ(velocity.x, 7.0F);
+    ++callback_count;
+  });
+  EXPECT_EQ(callback_count, 1);
+}
+
+TEST_F(ViewTest, CachedViewRefreshesForAnotherRegistry) {
+  engine::ecs::Registry other_registry;
+  const auto other_entity = other_registry.Create();
+  other_registry.Emplace<Transform>(other_entity, Transform{10.0F, 20.0F, 30.0F});
+  other_registry.Emplace<Velocity>(other_entity, Velocity{4.0F, 5.0F, 6.0F});
+  ASSERT_EQ(other_entity, moving_entity_);
+  auto view = registry_.CreateCachedView<Transform, Velocity>();
+
+  EXPECT_FALSE(view.IsCurrent(other_registry));
+  EXPECT_TRUE(view.IsCurrent(registry_));
+  view.Refresh(other_registry);
+  EXPECT_TRUE(view.IsCurrent(other_registry));
+  EXPECT_FALSE(view.IsCurrent(registry_));
+  ASSERT_EQ(view.Size(), 1U);
+  view.Each([](Transform& transform, Velocity& velocity) {
+    EXPECT_FLOAT_EQ(transform.x, 10.0F);
+    EXPECT_FLOAT_EQ(velocity.x, 4.0F);
+    transform.x = 42.0F;
+  });
+  EXPECT_FLOAT_EQ(other_registry.FindComponent<Transform>(other_entity)->x, 42.0F);
+  EXPECT_FLOAT_EQ(registry_.FindComponent<Transform>(moving_entity_)->x, 1.0F);
+
+  view.Refresh(registry_);
+  EXPECT_TRUE(view.IsCurrent(registry_));
+  EXPECT_FALSE(view.IsCurrent(other_registry));
+  view.Each([](const Transform& transform, const Velocity& velocity) {
+    EXPECT_FLOAT_EQ(transform.x, 1.0F);
+    EXPECT_FLOAT_EQ(velocity.x, 0.5F);
+  });
+}
+
 }  // namespace
