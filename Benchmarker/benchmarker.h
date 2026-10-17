@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <iosfwd>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -37,11 +38,17 @@ struct ExperimentResult {
 // This experiment module owns orchestration. Engine only records intervals.
 // Simulation must expose Initialize(), Update(dt, TimingRecorder&) and
 // GetStorageReport(). No callback or base-class interface is required.
+// This convenience runner requires zero Dummy count and change percent.
 template <typename Simulation>
 [[nodiscard]] ExperimentResult RunBenchmark(
     const boids::BoidSimulationConfig& simulation_config,
     const BenchmarkConfig& config, std::string_view implementation) {
   ValidateConfig(config);
+  if (simulation_config.dummy_count != 0U ||
+      simulation_config.dummy_change_percent != 0U) {
+    throw std::invalid_argument(
+        "Current benchmark runner requires Boid-only settings");
+  }
   ExperimentResult result;
   result.simulation_config = simulation_config;
   result.config = config;

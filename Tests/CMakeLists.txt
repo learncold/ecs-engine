@@ -118,6 +118,11 @@ target_link_libraries(BoidsEcsTests
 configure_test_target(BoidsEcsTests)
 gtest_discover_tests(BoidsEcsTests)
 
+add_executable(BoidsOopTests integration/oop_boid_simulation_tests.cpp)
+target_link_libraries(BoidsOopTests PRIVATE Boids::OOP GTest::gtest_main)
+configure_test_target(BoidsOopTests)
+gtest_discover_tests(BoidsOopTests)
+
 add_executable(BoidsComparisonTests
     integration/boid_equivalence_tests.cpp
 )

@@ -37,19 +37,20 @@ glm::vec3 BoidObject::CalculateAlignment(const glm::vec3& velocity_sum,
                         parameters_.max_alignment_force);
 }
 
-void BoidObject::CalculateAcceleration(std::span<const BoidObject> boids) {
+void BoidObject::CalculateAcceleration(
+    std::span<const std::unique_ptr<SimulationObject>> objects) {
   glm::vec3 separation{0.0F};
   glm::vec3 velocity_sum{0.0F};
   glm::vec3 position_sum{0.0F};
   std::size_t neighbor_count = 0U;
 
   constexpr float kMinDistanceSquared = 0.00000001F;
-  for (const auto& other : boids) {
-    if (&other == this) {
+  for (const auto& other : objects) {
+    if (other->Kind() != boids::ObjectKind::Boid || other.get() == this) {
       continue;
     }
 
-    const glm::vec3 offset = other.transform_.position - transform_.position;
+    const glm::vec3 offset = other->Position() - transform_.position;
     const float distance_squared = glm::dot(offset, offset);
     if (distance_squared >=
         parameters_.neighbor_radius * parameters_.neighbor_radius) {
@@ -57,8 +58,8 @@ void BoidObject::CalculateAcceleration(std::span<const BoidObject> boids) {
     }
 
     ++neighbor_count;
-    velocity_sum += other.velocity_;
-    position_sum += other.transform_.position;
+    velocity_sum += other->Velocity();
+    position_sum += other->Position();
 
     if (distance_squared > kMinDistanceSquared &&
         distance_squared <

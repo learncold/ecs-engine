@@ -83,7 +83,9 @@ report.add_objects<DummyObject>("dummy_objects", dummy_count);
 `complete()`가 false라면 `size_bytes()/capacity_bytes()`는 알려진 항목의 부분합이다.
 소유자가 동일한 할당을 서로 다른 이름으로 중복 보고하지 않도록 해야 한다.
 
-현재 OOP는 `vector<BoidObject>`를 보고한다. ECS는 Registry의 Entity 보조 배열과
+OOP는 부모 포인터 배열, 파생 타입별 개별 객체와 논리 번호 대응 배열을 보고한다.
+빌린 공통 입력은 포함하지 않으며 무인자 Initialize에서 직접 소유한 입력은 별도로
+보고한다. ECS는 Registry의 Entity 보조 배열과
 component sparse/dense 배열, CachedView, 시스템 등록 항목 배열과 할당 객체,
 계측 구간 이름 버퍼를 보고한다.
 unordered_map의 payload 이외 node/bucket 저장량은 미지원이므로 ECS 합계는 부분합이다.
@@ -146,8 +148,34 @@ const auto result = benchmarker::RunBenchmark<boids::ecs::BoidSimulation>(
 `entity_changes`, `query_preparation`, `neighbor_calculation`, `state_update`를 사용한다.
 실제 작업이 없는 구간은 `record_zero`로 보고한다. 기존 무계측 Update 오버로드도 유지한다.
 
-현재 실행 함수는 Boid 전용 ECS/OOP를 지원하며 Dummy 변경·상속 기반 OOP·Archetype
-연구 구현은 포함하지 않는다. CSV에도 이 실행 범위를 명시한다.
+현재 실행 함수는 기존 편의 API로 Boid 전용 ECS/OOP를 실행한다. CSV에도 이 실행
+범위를 명시한다. `dummy_count`나 `dummy_change_percent`가 0이 아닌 설정은
+실행 전에 `std::invalid_argument`로 거부해 실제 조건과 CSV의 Boid 전용 조건이
+달라지지 않도록 한다. OOP는 아래 공통 입력 API로 Dummy 변경을 지원하지만, 이 경로를
+Benchmarker/App에 연결하는 작업은 별도다. Archetype은 아직 포함하지 않는다.
+
+```cpp
+const auto input = boids::PrepareSimulationInput(config, warmup + measured);
+boids::oop::BoidSimulation simulation(config);
+simulation.Initialize(input); // 공통 입력 생성 후 이 호출만 초기화 계측
+timing.set_enabled(false);
+for (std::size_t step = 0; step < warmup; ++step)
+    simulation.Update(dt, input.dummy_steps[step], timing);
+timing.begin_measurement(measured);
+for (std::size_t step = warmup; step < warmup + measured; ++step) {
+    timing.begin_step_measurement();
+    simulation.Update(dt, input.dummy_steps[step], timing);
+    timing.end_step_measurement();
+}
+const auto storage = simulation.GetStorageReport();
+```
+
+호출자는 입력을 마지막 Update·저장량 보고까지 유지하며 변경하지 않는다. OOP는
+입력·계획을 복사하지 않고 전달된 Dummy 번호를 모두 삭제한 뒤 같은 순서로 재생성한다.
+`Objects()`의 현재 배열 index와 `LogicalId()`를 동일하게 취급하지 않는다.
+무인자 Initialize와 계획 없는 Update는 기존 호출을 위한 편의 API이며 실제 Dummy
+변경 수가 양수인 설정은 계획을 받는 Update가 필요하다. 이 편의 경로의 초기화
+시간에는 공통 입력 생성도 포함되므로 최종 실험의 입력 선행 생성 경로와 구분한다.
 
 ```powershell
 cmake --build --preset vs2022-release

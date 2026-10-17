@@ -67,6 +67,19 @@ TEST(BenchmarkerExperimentTest,
                std::invalid_argument);
 }
 
+TEST(BenchmarkerExperimentTest, RejectsDummySettingsInBoidOnlyRunner) {
+  for (int condition = 0; condition < 3; ++condition) {
+    boids::BoidSimulationConfig config;
+    config.boid_count = 1U;
+    config.dummy_count = condition == 1 ? 0U : 1U;
+    config.dummy_change_percent = condition == 0 ? 0U : 100U;
+    EXPECT_THROW(
+        static_cast<void>(benchmarker::RunBenchmark<boids::oop::BoidSimulation>(
+            config, {.warmup_steps = 0U, .measurement_steps = 1U}, "oop")),
+        std::invalid_argument);
+  }
+}
+
 TEST(BenchmarkerExperimentTest,
      ExportsSettingsRawSamplesMissingStatusAndCsvEscaping) {
   const auto result =
@@ -214,9 +227,9 @@ TEST(BenchmarkerExperimentTest, InstrumentationPreservesSimulationState) {
         for (int axis = 0; axis < 3; ++axis) {
           EXPECT_FLOAT_EQ(transform.position[axis], expected->position[axis]);
           EXPECT_NEAR(transform.position[axis],
-                      oop.Boids()[index].Position()[axis], 0.00001F);
-          EXPECT_NEAR(velocity.value[axis], oop.Boids()[index].Velocity()[axis],
-                      0.00001F);
+                      oop.Objects()[index]->Position()[axis], 0.00001F);
+          EXPECT_NEAR(velocity.value[axis],
+                      oop.Objects()[index]->Velocity()[axis], 0.00001F);
         }
         ++index;
       });

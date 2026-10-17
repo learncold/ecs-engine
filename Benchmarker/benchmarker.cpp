@@ -54,7 +54,8 @@ Environment Settings(const ExperimentResult& result) {
            "current Boid-only implementation; no Dummy churn or Archetype"},
           {"reserve_policy",
            result.implementation == "oop"
-               ? "Boid vector reserves boid_count during Initialize"
+               ? "Parent pointer vector reserves object count; logical indices "
+                 "resize to object count; each object is allocated separately"
            : result.implementation == "ecs"
                ? "Registry/component vectors grow on demand; CachedView "
                  "reserves driver size during query preparation"

@@ -10,6 +10,7 @@
 #include "Boids/ECS/Components/acceleration.h"
 #include "Boids/ECS/Components/velocity.h"
 #include "Boids/ECS/boid_simulation.h"
+#include "Boids/OOP/boid_object.h"
 #include "Boids/OOP/boid_simulation.h"
 #include "Engine/Renderer/transform.h"
 
@@ -31,18 +32,19 @@ void ExpectRotationNear(const glm::quat& actual, const glm::quat& expected) {
   EXPECT_NEAR(glm::dot(actual, actual), 1.0F, kTolerance);
   EXPECT_NEAR(glm::dot(expected, expected), 1.0F, kTolerance);
   // q and -q represent the same rotation.
-  const glm::quat aligned = glm::dot(actual, expected) < 0.0F ? -actual : actual;
+  const glm::quat aligned =
+      glm::dot(actual, expected) < 0.0F ? -actual : actual;
   for (int component = 0; component < 4; ++component) {
     EXPECT_NEAR(aligned[component], expected[component], kTolerance);
   }
 }
 
 void CompareSimulations(const boids::BoidSimulationConfig& config,
-                        float delta_seconds = 1.0F / 60.0F) {
+                        float delta_seconds = 1.0F / 60.0F,
+                        bool use_borrowed_input = false) {
   boids::ecs::BoidSimulation ecs_simulation(config);
   boids::oop::BoidSimulation oop_simulation(config);
   ecs_simulation.Initialize();
-  oop_simulation.Initialize();
 
   auto& registry = ecs_simulation.GetRegistry();
   std::vector<engine::ecs::Entity> entities;
@@ -50,11 +52,23 @@ void CompareSimulations(const boids::BoidSimulationConfig& config,
       [&](engine::ecs::Entity entity, const Transform&, const Velocity&,
           const Acceleration&) { entities.push_back(entity); });
   // A fresh registry allocates IDs in creation order, matching OOP indices.
-  std::sort(entities.begin(), entities.end(), [](auto left, auto right) {
-    return left.Value() < right.Value();
-  });
+  std::sort(entities.begin(), entities.end(),
+            [](auto left, auto right) { return left.Value() < right.Value(); });
+  boids::SimulationInput input;
+  if (use_borrowed_input) {
+    for (const auto entity : entities) {
+      input.initial_objects.push_back(
+          {.kind = boids::ObjectKind::Boid,
+           .logical_id = input.initial_objects.size(),
+           .position = registry.FindComponent<Transform>(entity)->position,
+           .velocity = registry.FindComponent<Velocity>(entity)->value});
+    }
+    oop_simulation.Initialize(input);
+  } else {
+    oop_simulation.Initialize();
+  }
   ASSERT_EQ(entities.size(), config.boid_count);
-  ASSERT_EQ(oop_simulation.Boids().size(), config.boid_count);
+  ASSERT_EQ(oop_simulation.Objects().size(), config.boid_count);
 
   for (int step = 0; step <= 100; ++step) {
     SCOPED_TRACE(::testing::Message() << "step=" << step);
@@ -65,7 +79,10 @@ void CompareSimulations(const boids::BoidSimulationConfig& config,
     for (std::size_t index = 0; index < entities.size(); ++index) {
       SCOPED_TRACE(::testing::Message() << "boid=" << index);
       const auto entity = entities[index];
-      const auto& object = oop_simulation.Boids()[index];
+      const auto& base = *oop_simulation.Objects()[index];
+      ASSERT_EQ(base.Kind(), boids::ObjectKind::Boid);
+      EXPECT_EQ(base.LogicalId(), index);
+      const auto& object = static_cast<const boids::oop::BoidObject&>(base);
       const auto* transform = registry.FindComponent<Transform>(entity);
       ASSERT_NE(transform, nullptr);
       {
@@ -98,6 +115,21 @@ TEST(BoidEquivalenceTest, MatchesInitialStateAndEveryStepForMultipleSeeds) {
     config.boid_count = 24U;
     config.random_seed = seed;
     CompareSimulations(config);
+  }
+}
+
+TEST(BoidEquivalenceTest, MatchesBorrowedInputForMultipleSeedsAndBoundaries) {
+  for (std::uint32_t seed : {0U, 42U, 12345U}) {
+    SCOPED_TRACE(::testing::Message() << "seed=" << seed);
+    boids::BoidSimulationConfig config;
+    config.boid_count = 24U;
+    config.random_seed = seed;
+    CompareSimulations(config, 1.0F / 60.0F, true);
+    config.spawn_half_extent = 1.0F;
+    config.boundary_half_extent = 1.0F;
+    config.initial_speed = 10.0F;
+    config.parameters.max_speed = 3.0F;
+    CompareSimulations(config, 0.05F, true);
   }
 }
 
