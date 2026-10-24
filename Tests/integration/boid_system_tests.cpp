@@ -148,7 +148,7 @@ TEST_F(BoidSystemTest, CalculatesCohesionTowardNeighborPosition) {
                  {1.0F, 2.0F, 3.0F});
 }
 
-TEST_F(BoidSystemTest, IncludesEntityWithoutBoidParametersAsNeighbor) {
+TEST_F(BoidSystemTest, ExcludesEntityWithoutBoidParametersAsNeighbor) {
   const engine::ecs::Entity self =
       AddBoid({0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 0.0F},
               MakeBoidParameters(0.0F, 0.0F, 1.0F));
@@ -160,7 +160,7 @@ TEST_F(BoidSystemTest, IncludesEntityWithoutBoidParametersAsNeighbor) {
   boid_system_.Update(registry_, 1.0F);
 
   ExpectVec3Near(registry_.FindComponent<Acceleration>(self)->value,
-                 {1.0F, 2.0F, 3.0F});
+                 {0.0F, 0.0F, 0.0F});
 }
 
 TEST_F(BoidSystemTest, RefreshesNeighborCacheAfterStructuralChange) {
@@ -177,6 +177,21 @@ TEST_F(BoidSystemTest, RefreshesNeighborCacheAfterStructuralChange) {
 
   ExpectVec3Near(registry_.FindComponent<Acceleration>(self)->value,
                  {1.0F, 2.0F, 3.0F});
+}
+
+TEST_F(BoidSystemTest,
+       RefreshesNeighborCacheWhenParametersAreRemovedOrRestored) {
+  const auto parameters = MakeBoidParameters(0.0F, 0.0F, 1.0F);
+  const auto self = AddBoid({0, 0, 0}, {0, 0, 0}, parameters);
+  const auto neighbor = AddBoid({1, 2, 3}, {0, 0, 0}, parameters);
+  boid_system_.Update(registry_, 0.0F);
+  ExpectVec3Near(registry_.FindComponent<Acceleration>(self)->value, {1, 2, 3});
+  registry_.Remove<BoidParameters>(neighbor);
+  boid_system_.Update(registry_, 0.0F);
+  ExpectVec3Near(registry_.FindComponent<Acceleration>(self)->value, {0, 0, 0});
+  registry_.Emplace<BoidParameters>(neighbor, parameters);
+  boid_system_.Update(registry_, 0.0F);
+  ExpectVec3Near(registry_.FindComponent<Acceleration>(self)->value, {1, 2, 3});
 }
 
 TEST_F(BoidSystemTest, AvoidsNonFiniteAccelerationForOverlappingBoids) {

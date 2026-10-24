@@ -45,6 +45,10 @@ Boids는 이 타깃을 사용하며 OpenGL 렌더링 모듈에 의존하지 않�
 `glm::glm`을 직접 제공한다. 공통 입력 생성은 표준 C++ 난수·표본 추출을 사용하며
 Engine 의존성이나 추가 vcpkg 패키지는 없다. `BoidsCommonTests`는
 `Boids::Common`과 GoogleTest만 링크해 이 경계를 검증한다.
+`Boids::ECS`는 공통 입력의 Boid·Dummy 생성과 Dummy 삭제·재생성을 지원한다.
+`BoidsEcsTests`는 이 타깃과 GoogleTest만 링크해 그래픽 초기화 없이 실행한다.
+입력을 받는 초기화에는 렌더 컴포넌트가 없으며, 기존 무인자 초기화는 시각화용
+MeshRenderer 데이터를 Boid에 유지한다. 추가 패키지나 그래픽 의존성은 없다.
 `Engine::ArchetypeECS`는 표준 C++20의 vector·span과 RTTI로 타입별 column을
 관리하며 `Engine::Measurement`에만 의존한다. 별도 패키지나 그래픽 의존성은 없고,
 `EngineArchetypeEcsTests`는 이 타깃과 GoogleTest만 링크한다.

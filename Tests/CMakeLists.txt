@@ -115,6 +115,7 @@ add_executable(BoidsEcsTests
     integration/boid_orientation_system_tests.cpp
     integration/boid_system_tests.cpp
     integration/boid_simulation_tests.cpp
+    integration/sparse_set_dummy_tests.cpp
     integration/movement_system_tests.cpp
 )
 

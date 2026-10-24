@@ -33,15 +33,14 @@ void SystemManager::Update(Registry& registry, float delta_seconds,
   if (!current_section.empty()) timing.stop(current_section);
 }
 
-void SystemManager::AppendStorageReport(
-    measurement::StorageReport& report) const {
-  report.add_vector("systems.entries", systems_);
+void SystemManager::AppendStorageReport(measurement::StorageReport& report,
+                                        std::string_view prefix) const {
+  report.add_vector(std::string(prefix) + ".entries", systems_);
   for (std::size_t index = 0; index < systems_.size(); ++index) {
     const auto& entry = systems_[index];
-    const std::string prefix = "systems." + std::to_string(index);
-    report.add_bytes(prefix + ".object", entry.object_bytes,
-                     entry.object_bytes);
-    report.add_vector(prefix + ".timing_section", entry.timing_section);
+    const std::string name = std::string(prefix) + "." + std::to_string(index);
+    report.add_bytes(name + ".object", entry.object_bytes, entry.object_bytes);
+    report.add_vector(name + ".timing_section", entry.timing_section);
     entry.system->AppendStorageReport(report);
   }
 }

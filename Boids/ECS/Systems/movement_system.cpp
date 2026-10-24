@@ -12,8 +12,9 @@ namespace boids::ecs {
 void MovementSystem::Update(engine::ecs::Registry& registry,
                             float delta_seconds,
                             engine::measurement::TimingRecorder& /* timing */) {
-  registry.CreateView<Velocity, Acceleration>().Each(
-      [delta_seconds](Velocity& velocity, const Acceleration& acceleration) {
+  registry.CreateView<BoidParameters, Velocity, Acceleration>().Each(
+      [delta_seconds](const BoidParameters&, Velocity& velocity,
+                      const Acceleration& acceleration) {
         velocity.value += acceleration.value * delta_seconds;
       });
 
@@ -23,9 +24,10 @@ void MovementSystem::Update(engine::ecs::Registry& registry,
             boids::LimitSpeed(velocity.value, parameters.max_speed);
       });
 
-  registry.CreateView<engine::renderer::Transform, Velocity>().Each(
-      [delta_seconds](engine::renderer::Transform& transform,
-                      const Velocity& velocity) {
+  registry.CreateView<BoidParameters, engine::renderer::Transform, Velocity>()
+      .Each([delta_seconds](const BoidParameters&,
+                            engine::renderer::Transform& transform,
+                            const Velocity& velocity) {
         transform.position = boids::RequireFinite(
             transform.position + velocity.value * delta_seconds);
       });

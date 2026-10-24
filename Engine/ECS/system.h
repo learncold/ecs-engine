@@ -55,7 +55,8 @@ class SystemManager {
 
   [[nodiscard]] std::size_t Size() const { return systems_.size(); }
 
-  void AppendStorageReport(measurement::StorageReport& report) const;
+  void AppendStorageReport(measurement::StorageReport& report,
+                           std::string_view prefix = "systems") const;
 
  private:
   struct Entry {
