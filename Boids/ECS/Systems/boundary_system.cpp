@@ -3,6 +3,7 @@
 #include <cmath>
 #include <stdexcept>
 
+#include "Boids/Common/boid_parameters.h"
 #include "Boids/ECS/Components/velocity.h"
 #include "Engine/ECS/registry.h"
 #include "Engine/Renderer/transform.h"
@@ -18,8 +19,9 @@ BoundarySystem::BoundarySystem(float half_extent) : half_extent_(half_extent) {
 void BoundarySystem::Update(engine::ecs::Registry& registry,
                             float /* delta_seconds */,
                             engine::measurement::TimingRecorder& /* timing */) {
-  registry.CreateView<engine::renderer::Transform, Velocity>().Each(
-      [this](engine::renderer::Transform& transform, Velocity& velocity) {
+  registry.CreateView<BoidParameters, engine::renderer::Transform, Velocity>()
+      .Each([this](const BoidParameters&,
+                   engine::renderer::Transform& transform, Velocity& velocity) {
         for (int axis = 0; axis < 3; ++axis) {
           if (transform.position[axis] < -half_extent_) {
             transform.position[axis] = -half_extent_;

@@ -86,7 +86,7 @@ report.add_objects<DummyObject>("dummy_objects", dummy_count);
 OOP는 부모 포인터 배열, 파생 타입별 개별 객체와 논리 번호 대응 배열을 보고한다.
 빌린 공통 입력은 포함하지 않으며 무인자 Initialize에서 직접 소유한 입력은 별도로
 보고한다. ECS는 Registry의 Entity 보조 배열과
-component sparse/dense 배열, CachedView, 시스템 등록 항목 배열과 할당 객체,
+component sparse/dense 배열, 논리 번호 대응, CachedView, 시스템 등록 항목 배열과 할당 객체,
 계측 구간 이름 버퍼를 보고한다.
 unordered_map의 payload 이외 node/bucket 저장량은 미지원이므로 ECS 합계는 부분합이다.
 시뮬레이션 객체 자체를 포함하며, 그 안의 컨테이너 제어 필드는 별도로 더하지 않는다.
@@ -113,12 +113,17 @@ SystemManager는 같은 recorder를 모든 System에 전달한다. `Add<SystemTy
 등록과 Clear는 Update 순회 밖에서 수행해야 한다.
 
 ```cpp
-system_manager_.Add<BoidSystem>();
-system_manager_.AddTimed<MovementSystem>("state_update");
-system_manager_.AddTimed<BoundarySystem>("state_update", boundary_half_extent);
-system_manager_.AddTimed<BoidOrientationSystem>("state_update");
+auto& boids = system_manager_.Add<BoidSystem>();
+state_system_manager_.AddTimed<MovementSystem>("state_update");
+state_system_manager_.AddTimed<BoundarySystem>("state_update", boundary_half_extent);
+state_system_manager_.AddTimed<BoidOrientationSystem>("state_update");
 
 system_manager_.Update(registry_, dt, timing);
+if (boids.HasBoids()) {
+    state_system_manager_.Update(registry_, dt, timing);
+} else {
+    timing.record_zero("state_update");
+}
 ```
 
 같은 구간 이름으로 연속 등록된 System들은 하나의 start/stop으로 계측한다.
@@ -134,7 +139,10 @@ system_manager_.Update(registry_, dt, timing);
 기본 구현은 추가 저장소가 없는 경우 아무것도 더하지 않는다. 동적 저장소가 있는 System은
 이를 override하여 별도 할당만 보고한다. BoidSystem은 CachedView 배열을 보고하며 객체
 자체의 `sizeof(BoidSystem)`은 매니저가 이미 더하므로 다시 더하지 않는다. 객체 항목 이름은
-등록 순서에 따라 `systems.<index>.object`다.
+등록 순서에 따라 `<prefix>.<index>.object`다.
+`AppendStorageReport(report, prefix)`의 기본 접두사는 `systems`이며, Sparse Set의
+상태 갱신 매니저는 `state_systems`를 사용한다. 개별 System의 추가 저장소 이름은
+이 접두사로 변경하지 않는다.
 
 ## 실험 실행 및 결과
 
@@ -151,7 +159,7 @@ const auto result = benchmarker::RunBenchmark<boids::ecs::BoidSimulation>(
 현재 실행 함수는 기존 편의 API로 Boid 전용 ECS/OOP를 실행한다. CSV에도 이 실행
 범위를 명시한다. `dummy_count`나 `dummy_change_percent`가 0이 아닌 설정은
 실행 전에 `std::invalid_argument`로 거부해 실제 조건과 CSV의 Boid 전용 조건이
-달라지지 않도록 한다. OOP는 아래 공통 입력 API로 Dummy 변경을 지원하지만, 이 경로를
+달라지지 않도록 한다. OOP와 Sparse Set은 아래 공통 입력 API로 Dummy 변경을 지원하지만, 이 경로를
 Benchmarker/App에 연결하는 작업은 별도다. Archetype은 아직 포함하지 않는다.
 
 ```cpp
@@ -191,6 +199,14 @@ Update·저장량 보고까지 살아 있고 변경되지 않아야 한다. warm
 앞부분 계획을 적용하며, 측정에서는 상태를 유지한 채 `dummy_steps[warmup + step]`을
 전달한다. 호출자가 전체 step 계측과 측정 종료 후 프로세스 최대 메모리 조회를 수행한다.
 Archetype의 저장·실행 계약은 [아키텍처](architecture.md#archetype-boids-시뮬레이션)를 참고한다.
+
+`Boids::ECS`도 같은 `Initialize(input)`과 `Update(dt, dummy_ids, timing)` API를
+제공한다. `EntityFor(logical_id)`로 Dummy 재생성 이후 현재 Entity를 조회할 수 있다.
+입력을 받는 경로에는 MeshRenderer를 추가하지 않으며 Dummy는 이웃·상태 갱신에서
+제외한다. 이 경로도 위 실행 템플릿 대신 호출자가 계획과 계측을 직접 연결한다.
+계획 없는 Update는 `floor(dummy_count * dummy_change_percent / 100)`이 0일 때만
+허용한다. 빌린 입력은 저장량에서 제외하고 논리 번호 대응·Registry·캐시·두 SystemManager의
+소유 저장량을 보고한다. 매니저별 항목은 `systems`와 `state_systems`로 구분한다.
 
 ```powershell
 cmake --build --preset vs2022-release

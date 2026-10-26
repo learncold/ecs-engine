@@ -20,14 +20,17 @@ void BoidSystem::Update(engine::ecs::Registry& registry,
   }
   timing.stop("query_preparation");
 
+  if (!HasBoids()) {
+    timing.record_zero("neighbor_calculation");
+    return;
+  }
   timing.start("neighbor_calculation");
   registry
-      .CreateView<engine::renderer::Transform, Velocity, BoidParameters,
+      .CreateView<BoidParameters, engine::renderer::Transform, Velocity,
                   Acceleration>()
-      .Each([&](engine::ecs::Entity entity,
+      .Each([&](engine::ecs::Entity entity, const BoidParameters& parameters,
                 const engine::renderer::Transform& transform,
-                const Velocity& velocity, const BoidParameters& parameters,
-                Acceleration& acceleration) {
+                const Velocity& velocity, Acceleration& acceleration) {
         acceleration.value = CalculateAcceleration(
             *neighbor_view_, entity, transform, velocity, parameters);
       });
@@ -54,7 +57,7 @@ glm::vec3 BoidSystem::CalculateAcceleration(
   std::size_t neighbor_count = 0U;
 
   constexpr float kMinDistanceSquared = 0.00000001F;
-  neighbor_view.Each([&](engine::ecs::Entity other,
+  neighbor_view.Each([&](engine::ecs::Entity other, const BoidParameters&,
                          const engine::renderer::Transform& other_transform,
                          const Velocity& other_velocity) {
     if (other == self) {

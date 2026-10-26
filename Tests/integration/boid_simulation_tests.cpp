@@ -158,6 +158,7 @@ TEST(BoundarySystemTest, ClampsPositionAndReflectsOutwardVelocity) {
   registry.Emplace<Transform>(entity,
                               Transform{.position = {3.0F, -4.0F, 1.0F}});
   registry.Emplace<Velocity>(entity, Velocity{.value = {1.0F, -2.0F, 3.0F}});
+  registry.Emplace<BoidParameters>(entity, BoidParameters{});
   BoundarySystem boundary_system(2.0F);
 
   boundary_system.Update(registry, 0.0F);

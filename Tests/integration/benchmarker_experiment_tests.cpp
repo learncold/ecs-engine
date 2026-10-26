@@ -173,7 +173,9 @@ TEST(BenchmarkerExperimentTest,
       sizeof(boids::ecs::BoundarySystem),
       sizeof(boids::ecs::BoidOrientationSystem)};
   for (std::size_t index = 0; index < 4U; ++index) {
-    const std::string name = "systems." + std::to_string(index) + ".object";
+    const std::string name =
+        index == 0U ? "systems.0.object"
+                    : "state_systems." + std::to_string(index - 1U) + ".object";
     bool found = false;
     for (const auto& entry : ecs.storage.entries()) {
       if (entry.name == name) {

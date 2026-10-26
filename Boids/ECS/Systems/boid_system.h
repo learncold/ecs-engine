@@ -19,10 +19,17 @@ class BoidSystem final : public engine::ecs::System {
               engine::measurement::TimingRecorder& timing) override;
   void AppendStorageReport(
       engine::measurement::StorageReport& report) const override;
+  // Valid after Update has prepared the neighbor query.
+  [[nodiscard]] bool HasBoids() const {
+    return neighbor_view_ && neighbor_view_->Size() != 0U;
+  }
 
  private:
+  // Dummy churn moves Transform/Velocity rows, but never BoidParameters.
+  // Driving by parameters preserves Boid neighbor summation order on refresh.
   using NeighborView =
-      engine::ecs::CachedView<engine::renderer::Transform, Velocity>;
+      engine::ecs::CachedView<BoidParameters, engine::renderer::Transform,
+                              Velocity>;
 
   [[nodiscard]] glm::vec3 CalculateAcceleration(
       NeighborView& neighbor_view, engine::ecs::Entity self,

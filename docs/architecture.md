@@ -71,8 +71,8 @@ warmup 이후 상태나 계획을 다시 시작하지 않고 다음 step 목록�
 `initial_objects[logical_id]`의 위치·속도를 복원한다. Transform·회전·가속도와 행동
 파라미터의 저장은 각 구현의 책임이다. 입력 수명은 마지막 갱신과 저장량 보고까지
 유지하고 시뮬레이션 저장량과 별도로 보고해야 한다.
-OOP와 Archetype은 공통 입력을 받는 초기화·갱신 API를 제공한다. ECS와 Benchmarker·CLI의
-공통 입력·Dummy 변경 연결은 후속 작업이며 기존 실행 경로는 유지한다.
+OOP, Sparse Set과 Archetype은 공통 입력을 받는 초기화·갱신 API를 제공한다.
+Benchmarker·CLI의 공통 입력·Dummy 변경 연결은 후속 작업이며 기존 실행 경로는 유지한다.
 
 - Sparse Set ECS: Registry가 개체 수명과 타입별 ComponentStorage를 소유한다.
   컴포넌트는 dense 배열에 저장하고, sparse index로 개체와 배열 위치를 연결한다.
@@ -88,10 +88,29 @@ OOP와 Archetype은 공통 입력을 받는 초기화·갱신 API를 제공한�
   추가한다. 객체 데이터는 개별 할당되고 포인터 배열만 연속 저장된다.
   종류·논리 번호와 내부 번호 대응이 어긋나지 않도록 부모 객체의 복사·대입은 금지한다.
 
-ECS는 기존 시각화용 MeshRenderer 데이터도 보관한다.
-ECS의 View는 필요한 컴포넌트 조합을 조회하며, BoidSystem은 이웃 반복 조회에
-CachedView의 개체·dense index를 재사용한다. 값 변경은 그대로 반영되고,
-관련 저장 구조가 바뀌면 사용 전에 캐시를 갱신한다. 순회 중에는 구조를 변경하지 않는다.
+Sparse Set의 `Initialize(const SimulationInput&)`는 입력을 복사하지 않고 빌린다.
+초기 개체 수·종류·논리 번호와 유한한 위치·속도를 검증한 뒤 입력 순서대로 생성한다.
+Boid는 Transform·Velocity·Acceleration·BoidParameters를, Dummy는 Transform·Velocity만
+가진다. 무인자 `Initialize()`는 공통 입력을 소유하고 기존 시각화용 MeshRenderer를
+Boid에 추가한다. 재초기화는 기존 Entity를 무효화하고 논리 번호 대응을 다시 만든다.
+`EntityFor(logical_id)`는 현재 Entity를 반환하고 없는 번호·삭제된 개체는
+`std::out_of_range`로 처리한다.
+
+Sparse Set의 `Update(dt, dummy_ids, timing)`는 전달된 목록 순서로 Dummy를 모두
+삭제한 뒤 같은 순서로 재생성한다. Registry의 실제 Destroy/Create와 논리 번호→Entity
+배열 갱신을 수행하고 빌린 입력에서 최초 위치·속도를 복원한다. Simulation은 난수나
+step 번호를 관리하지 않는다. 호출자는 입력을 변경하지 않고 마지막 Update·저장량
+보고까지 유지하며, warmup 다음 계획을 측정에 이어 전달한다. 계획 없는 Update는
+계산된 변경 수가 0일 때만 허용하고, dt는 유한한 비음수여야 한다. 실행 도중 예외가
+발생하면 재초기화와 새 recorder가 필요하다.
+
+ECS의 View는 필요한 컴포넌트 조합을 조회하며, BoidSystem은
+`CachedView<BoidParameters, Transform, Velocity>`의 Entity·dense index를 재사용한다.
+Dummy가 없는 BoidParameters 배열을 기준으로 캐시를 구성해 Dummy 삭제로
+Transform·Velocity의 dense 순서가 바뀌어도 Boid 이웃 합산 순서를 유지한다.
+값 변경은 그대로 반영되고, 관련 저장 구조가 바뀌면 조회 준비 구간에서 캐시를
+갱신한다. 이동·속도 제한·경계·방향 처리도 BoidParameters가 있는 개체만 대상으로
+하며 순회 중에는 구조를 변경하지 않는다.
 
 OOP의 `Initialize(const SimulationInput&)`는 Common의 입력을 복사하지 않고 빌려
 사용한다. 호출자는 마지막 Update·저장량 보고까지 입력을 살아 있고 변경되지 않은
@@ -113,6 +132,8 @@ Boid만 처리한다. 별도 Boid 대상 캐시나 정렬은 없으며, 번호 �
 필요하며, 실패한 계측 실행은 폐기하고 새 recorder를 사용한다.
 
 ECS의 네 System은 모두 SystemManager가 `unique_ptr<System>`로 소유한다.
+조회 준비·이웃 계산 매니저와 상태 갱신 매니저를 분리하며, 준비된 캐시가 비었으면
+상태 갱신 매니저를 건너뛰고 해당 구간을 명시적 0으로 기록한다.
 System의 공통 Update는 Registry, dt와 같은 TimingRecorder 참조를 받는다.
 SystemManager는 등록 순서대로 실행하며, 두 인자 Update는 비활성 recorder를
 만들어 같은 실행 경로를 사용한다. 개별 System의 두 인자 호출도 공통 System
@@ -134,7 +155,8 @@ Headless 벤치마크는 다음 순서로 실행한다.
 6. App이 CSV 원자료를 저장하고 설정·환경·시간·메모리 요약을 출력한다.
 
 두 구현은 같은 seed와 설정으로 초기화하고 naive all-pairs 이웃 탐색을 사용한다.
-한 step은 모든 Boid의 가속도 계산 → 속도·위치 갱신 → 경계 처리 → 방향 갱신 순서다.
+한 step은 개체 변경 → 조회 준비 → 모든 Boid의 가속도 계산 → 속도·위치 갱신 →
+경계 처리 → 방향 갱신 순서다.
 ECS는 SystemManager에 등록된 Boid·Movement·Boundary·Orientation 순서로,
 OOP는 객체 메서드의 반복 호출로 수행한다. BoidSystem은 조회 준비·이웃 계산을
 내부에서 계측하며, 세 상태 갱신 System은 `AddTimed("state_update", ...)`로
@@ -145,22 +167,27 @@ OOP는 객체 메서드의 반복 호출로 수행한다. BoidSystem은 조회 �
 
 전체 step 계측은 Update 호출을 감싸며 초기화·warmup·출력은 제외한다.
 구간 시간과 별도로 측정하고 구간 계측 비용을 포함한다. 원자료 복사·집계는 step
-경계 밖에서 수행한다. ECS의 개체 변경과 OOP의 빈 변경 목록은 명시적 0으로
-기록한다. OOP의 비어 있지 않은 변경 목록은 대상 조회·파괴·생성·번호 대응 갱신을
-`entity_changes`로 계측한다. OOP는 별도 조회 준비가 없어 해당 구간도 명시적 0으로 기록한다.
+경계 밖에서 수행한다. 빈 변경 목록은 명시적 0으로 기록한다. 비어 있지 않은
+변경 목록은 대상 조회·파괴·생성·번호 대응 갱신을 `entity_changes`로 계측한다.
+Sparse Set은 Boid가 없으면 이웃 계산과 상태 갱신도 명시적 0으로 기록한다.
+캐시 확인·갱신은 빈 결과라도 실제 작업이 있으므로 조회 준비에서 계측한다.
+OOP는 별도 조회 준비가 없어 해당 구간을 명시적 0으로 기록한다.
 
 저장량은 시뮬레이션 객체 자체와 소유한 배열·개별 할당 객체의 size/capacity 기반
 추정치다. ECS의 alive/generation/free ID 배열, component sparse/dense 배열과
-CachedView를 포함한다. OOP는 부모 포인터 배열, 실제 파생 타입 크기의 개별 객체와
+CachedView, 논리 번호→Entity 배열을 포함한다. OOP는 부모 포인터 배열, 실제 파생 타입 크기의 개별 객체와
 논리 번호 대응 배열을 보고하며 객체 내부 필드를 다시 더하지 않는다.
 무인자 Initialize는 Common 생성함수로 만든 입력을 별도 소유하고 그 객체와
-배열 저장량도 보고한다. 외부에서 빌린 입력은 OOP 저장량에 포함하지 않는다.
+배열 저장량도 보고한다. 외부에서 빌린 입력은 시뮬레이션 저장량에 포함하지 않는다.
 SystemManager는 등록 항목 배열의 size/capacity와 등록 시 저장한 `sizeof(SystemType)`을
 사용하여 실제 파생 타입의 개별 할당 객체를 보고한다. 각 System의 가상
 AppendStorageReport는 별도 소유한 동적 저장소만 추가한다. 따라서 BoidSystem의
 CachedView 배열도 매니저를 통해 보고되고, Simulation은 System 타입별 항목을 나열하지
 않는다. 계측 구간 이름은 소유한 `vector<char>` 버퍼로 저장하며 이 버퍼의 size/capacity도
 보고한다. 등록 항목의 제어 필드와 각 System의 객체 내부 필드는 별도로 중복 계산하지 않는다.
+Sparse Set의 두 매니저는 `systems`와 `state_systems` 접두사로 저장량을 구분한다.
+SystemManager의 `AppendStorageReport(report, prefix)`로 매니저별 이름을 지정하며
+기본 접두사는 `systems`다. 개별 System이 추가하는 별도 저장소 이름은 그대로 유지한다.
 unordered_map의 항목 payload는 계산하지만 구현별 node 링크·bucket 저장량은
 미지원으로 표시하며 ECS 합계는 알려진 항목의 부분합이다. allocator overhead와
 fragmentation은 추정에 포함하지 않는다. 프로세스 최대값에는 계측 버퍼와 warmup도
@@ -261,10 +288,17 @@ OOP와 Archetype의 통합 테스트는 3개 seed·Dummy 변경 비율 0·40·10
 위치·속도·가속도·회전·크기를 같은 `1e-5` 허용 오차로 비교한다.
 
 현재 App/Benchmarker 비교 실행은 Boid 전용 ECS/OOP이며 Dummy 변경과 Archetype
-선택을 연결하지 않았다. OOP와 Archetype의 공통 입력·Dummy 변경 API는 Common의
+선택을 연결하지 않았다. 세 구현의 공통 입력·Dummy 변경 API는 Common의
 `simulation_input.h` 계약을 사용하며 warmup과 측정의 계획 번호는 호출자가 이어서
-전달한다. OOP의 계획 없는 Update는 실제 Dummy 변경 수가 양수이면 오류로 처리한다.
-ECS의 공통 입력·Dummy 변경 연결과 세 구현 전체 동등성 검증은 후속 작업이다.
+전달한다. OOP와 Sparse Set의 계획 없는 Update는 실제 Dummy 변경 수가 양수이면
+오류로 처리한다. 세 구현 전체 동등성 검증과 App/Benchmarker 연결은 후속 작업이다.
+
+Sparse Set 회귀 테스트는 변경 비율 0·40·100%에서 warmup 100회와 측정 1,000회를
+연속 실행한다. Dummy의 초기 위치·속도와 교체 비율이 달라도 변경 없는 기준 실행과
+논리 번호별 Boid 위치·속도·가속도 및 방향이 허용 오차 `1e-5` 내에서 일치하는지
+검증한다. Dummy만 있는 경우, 빈 입력, 변경 수 내림, 반복 교체의 Entity 세대·번호
+대응, 캐시 dense index 갱신과 재초기화, 네 구간의 기록·명시적 0도 검사한다.
+
 계측 API 계약과 연결 예시는
 [벤치마크 API](benchmarker-api.md)를 참고한다.
 

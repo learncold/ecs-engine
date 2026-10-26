@@ -12,8 +12,6 @@
 #include "Boids/Common/boid_simulation_config.h"
 #include "Boids/ECS/Components/acceleration.h"
 #include "Boids/ECS/Components/velocity.h"
-#include "Boids/ECS/Systems/boid_system.h"
-#include "Boids/ECS/Systems/movement_system.h"
 #include "Boids/ECS/boid_simulation.h"
 #include "Boids/OOP/boid_object.h"
 #include "Boids/OOP/boid_simulation.h"
@@ -240,8 +238,7 @@ TEST(BoidEquivalenceTest, OopAndArchetypeMatchDuringDummyChurn) {
   }
 }
 
-// OOP and Archetype accept the same input; exercise the legacy ECS system
-// APIs with those explicit states until its common-input integration lands.
+// All implementations reject overflow and require reinitialization afterward.
 void ExpectArithmeticOverflow(const boids::BoidSimulationConfig& config,
                               const boids::SimulationInput& input, float dt) {
   boids::archetype::BoidSimulation archetype(config);
@@ -277,24 +274,19 @@ void ExpectArithmeticOverflow(const boids::BoidSimulationConfig& config,
   oop.Initialize(reset_input);
   EXPECT_NO_THROW(oop.Update(0.0F, {}, disabled));
 
-  engine::ecs::Registry registry;
-  for (const auto& initial : input.initial_objects) {
-    ASSERT_EQ(initial.kind, boids::ObjectKind::Boid);
-    const auto entity = registry.Create();
-    registry.Emplace<Transform>(entity,
-                                Transform{.position = initial.position});
-    registry.Emplace<Velocity>(entity, Velocity{initial.velocity});
-    registry.Emplace<Acceleration>(entity, Acceleration{});
-    registry.Emplace<boids::BoidParameters>(entity, config.parameters);
-  }
-  boids::ecs::BoidSystem boid_system;
-  boids::ecs::MovementSystem movement;
-  EXPECT_THROW(
-      {
-        boid_system.Update(registry, dt);
-        movement.Update(registry, dt);
-      },
-      std::overflow_error);
+  boids::ecs::BoidSimulation ecs(config);
+  ecs.Initialize(input);
+  engine::measurement::TimingRecorder ecs_timing(
+      {"entity_changes", "query_preparation", "neighbor_calculation",
+       "state_update"});
+  ecs_timing.begin_measurement(1U);
+  ecs_timing.begin_step_measurement();
+  EXPECT_THROW(ecs.Update(dt, {}, ecs_timing), std::overflow_error);
+  EXPECT_THROW(ecs_timing.end_step_measurement(), std::logic_error);
+  EXPECT_THROW(static_cast<void>(ecs_timing.result()), std::logic_error);
+  EXPECT_THROW(ecs.Update(dt, {}, disabled), std::logic_error);
+  ecs.Initialize(reset_input);
+  EXPECT_NO_THROW(ecs.Update(0.0F, {}, disabled));
 }
 
 TEST(BoidEquivalenceTest, RejectsPositionOverflowBeforeBoundaryClamping) {

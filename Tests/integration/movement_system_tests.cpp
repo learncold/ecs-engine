@@ -2,9 +2,10 @@
 
 #include <glm/vec3.hpp>
 
-#include "Engine/ECS/registry.h"
+#include "Boids/Common/boid_parameters.h"
 #include "Boids/ECS/Components/velocity.h"
 #include "Boids/ECS/Systems/movement_system.h"
+#include "Engine/ECS/registry.h"
 #include "Engine/Renderer/transform.h"
 
 namespace {
@@ -31,6 +32,8 @@ class MovementSystemTest : public testing::Test {
                                  Transform{.position = {1.0F, 2.0F, 3.0F}});
     registry_.Emplace<Velocity>(moving_entity_,
                                 Velocity{.value = {0.5F, 1.5F, -2.0F}});
+    registry_.Emplace<boids::BoidParameters>(
+        moving_entity_, boids::BoidParameters{.max_speed = 10.0F});
     registry_.Emplace<Transform>(transform_only_entity_,
                                  Transform{.position = {10.0F, 20.0F, 30.0F}});
     registry_.Emplace<Velocity>(velocity_only_entity_,
@@ -51,12 +54,14 @@ TEST_F(MovementSystemTest, UpdatesPositionUsingVelocityAndDeltaTime) {
                  {2.0F, 5.0F, -1.0F});
 }
 
-TEST_F(MovementSystemTest, UpdatesEveryEntityWithTransformAndVelocity) {
+TEST_F(MovementSystemTest, UpdatesEveryBoidWithTransformAndVelocity) {
   const engine::ecs::Entity second_moving_entity = registry_.Create();
   registry_.Emplace<Transform>(second_moving_entity,
                                Transform{.position = {-2.0F, 4.0F, 8.0F}});
   registry_.Emplace<Velocity>(second_moving_entity,
                               Velocity{.value = {3.0F, -2.0F, 1.0F}});
+  registry_.Emplace<boids::BoidParameters>(
+      second_moving_entity, boids::BoidParameters{.max_speed = 10.0F});
 
   movement_system_.Update(registry_, 0.5F);
 
@@ -64,7 +69,7 @@ TEST_F(MovementSystemTest, UpdatesEveryEntityWithTransformAndVelocity) {
                  {1.25F, 2.75F, 2.0F});
   ExpectVec3Near(
       registry_.FindComponent<Transform>(second_moving_entity)->position,
-                 {-0.5F, 3.0F, 8.5F});
+      {-0.5F, 3.0F, 8.5F});
 }
 
 TEST_F(MovementSystemTest, LeavesPositionUnchangedWhenVelocityIsMissing) {
@@ -75,7 +80,7 @@ TEST_F(MovementSystemTest, LeavesPositionUnchangedWhenVelocityIsMissing) {
 
   ExpectVec3Near(
       registry_.FindComponent<Transform>(transform_only_entity_)->position,
-                 initial_position);
+      initial_position);
 }
 
 TEST_F(MovementSystemTest, LeavesPositionUnchangedWhenDeltaTimeIsZero) {
