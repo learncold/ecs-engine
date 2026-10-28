@@ -283,15 +283,32 @@ Dummy 변경 비율 0·40·100%에서 warmup 이후 계측을 활성화한 실�
 별도 double 수식으로 실제 갱신 전 상태에서 다음 상태를 예측하는 테스트도 제공한다.
 이 테스트는 production 수학 함수나 OOP 구현을 기대값 계산에 재사용하지 않고,
 3개 seed·3개 변경 비율·3개 Boid 수에서 각각 60 step을 `1e-5` 허용 오차로 검사한다.
-OOP와 Archetype의 통합 테스트는 3개 seed·Dummy 변경 비율 0·40·100%에서
-각각 warmup 100 + 측정 길이 1,000 step의 연속 계획을 적용한다. 매 step 논리 번호별
-위치·속도·가속도·회전·크기를 같은 `1e-5` 허용 오차로 비교한다.
+`BoidsComparisonTests`는 하나의 `SimulationInput`과 같은 dt로 OOP·Sparse Set·
+Archetype을 초기화하고, 초기 상태와 매 step의 종류·위치·속도·가속도·회전·크기를
+논리 번호로 대응시켜 비교한다. 모든 실수 성분의 절대 허용 오차는 `1e-5`이며,
+회전은 단위 quaternion 여부를 확인한 뒤 내적 부호로 `q`와 `-q`를 정렬해 비교한다.
+실패 출력에는 seed·개체 수·변경 비율·dt·warmup/측정 step·논리 번호·구현과
+서로 다른 필드·성분·값이 포함된다.
+
+3개 seed × 7개 Boid/Dummy 수 조합 × 변경 비율 0·40·100%에서 warmup 7 +
+측정 80 step을 검사한다. Boid 또는 Dummy가 없거나 모두 없는 경우, 단일 Boid와
+내림으로 실제 변경 수가 0인 경우도 포함한다. 별도로 3개 seed·3개 변경 비율에서
+warmup 100 + 측정 1,000 step을 연속 실행한다. 측정 경계에서 초기화하지 않고
+다음 계획을 사용하며, 구현별 recorder를 활성화하고 네 구간의 측정 기록을 확인한다.
+매 step 개체 수·논리 번호의 유일성과 종류를 확인하고, ECS 두 저장소에서는 선택된
+Dummy의 이전 Entity 무효화와 선택되지 않은 Entity의 보존도 검사한다.
+모든 Dummy의 Transform·Velocity는 교체 여부와 관계없이 최초 상태와 같아야 한다.
+
+Dummy 제외 검증은 같은 Boid 상태를 가진 Boid 전용 실행과, 가까운 고속 Dummy 및
+경계 밖 Dummy를 각각 포함한 실행을 세 구현 모두에서 비교한다. Dummy의 존재·
+상태·교체 비율이 Boid 결과에 영향을 주지 않는지 확인하며, 경계 반사·속도 제한·
+겹친 위치·이웃 없음·속도 0·dt 0·큰 유한 초기 속도도 세 구현으로 비교한다.
 
 현재 App/Benchmarker 비교 실행은 Boid 전용 ECS/OOP이며 Dummy 변경과 Archetype
 선택을 연결하지 않았다. 세 구현의 공통 입력·Dummy 변경 API는 Common의
 `simulation_input.h` 계약을 사용하며 warmup과 측정의 계획 번호는 호출자가 이어서
 전달한다. OOP와 Sparse Set의 계획 없는 Update는 실제 Dummy 변경 수가 양수이면
-오류로 처리한다. 세 구현 전체 동등성 검증과 App/Benchmarker 연결은 후속 작업이다.
+오류로 처리한다. App/Benchmarker 연결은 후속 작업이다.
 
 Sparse Set 회귀 테스트는 변경 비율 0·40·100%에서 warmup 100회와 측정 1,000회를
 연속 실행한다. Dummy의 초기 위치·속도와 교체 비율이 달라도 변경 없는 기준 실행과
