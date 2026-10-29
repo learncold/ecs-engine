@@ -7,3 +7,4 @@ out/
 *.VC.opendb
 compile_commands.json
 *.bkp
+__pycache__/

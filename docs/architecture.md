@@ -38,6 +38,13 @@ overflow하거나 subnormal·0으로 underflow하면 해당 계산만 double로 
 타입을 전달하지 않는다. `Engine::Measurement`는 시간·메모리 계측 API만 제공한다.
 Boids와 ECS 저장소는 이 API로 구간을 기록하고 소유한 저장량을 보고한다.
 
+`scripts/run_benchmarks.py`는 JSON 설정을 검증한 뒤 같은 VS2022 Release App을
+별도 headless 프로세스로 순차 실행한다. Windows mutex로 도구의 중복 실행을 막고,
+새 결과 폴더에 원본 설정·실행 명령·로그·CSV·판정 목록을 보존한다. 자식 종료 코드와
+CSV v2의 실제 조건·원자료·환경을 확인하고 개별 실패 후 나머지 실행을 계속한다.
+시뮬레이션이나 계측 구간은 변경하지 않는다. 실행 계약은
+[반복 벤치마크](benchmark-batches.md)를 참고한다.
+
 ## 데이터와 저장 방식
 
 `Boids/Common/simulation_input.h`는 `ObjectKind`, `InitialObjectState`,

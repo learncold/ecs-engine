@@ -11,6 +11,7 @@ OOP, Sparse Set ECS, Archetype ECS의 저장·조회 비용과 성능을 비교�
 ## 빌드
 
 필수 환경: CMake 3.20+, Visual Studio 2022 C++ 워크로드, vcpkg와 `VCPKG_ROOT` 환경 변수.
+전체 테스트와 반복 실험 도구에는 Python 3.10 이상이 필요합니다(추가 패키지 없음).
 
 ```powershell
 cmake --preset vs2022
@@ -41,6 +42,9 @@ cmake --build --preset vs2022-release
 `--agents`는 Boid 수이며 Boid·Dummy 수와 warmup은 0을 허용합니다.
 변경 비율은 0~100, 측정 step 수와 dt는 양수입니다. 공통 초기 상태·변경 계획은
 초기화 계측 전에 준비하며, CSV에 실제 조건과 공통 입력의 별도 저장량을 기록합니다.
+
+조건별 반복 실행은 `python -B scripts/run_benchmarks.py benchmarks/smoke.json`으로
+수행합니다. JSON 설정, 결과 보존과 검증 방법은 [반복 벤치마크](docs/benchmark-batches.md)를 참고합니다.
 
 ## 구조
 

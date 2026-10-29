@@ -13,6 +13,7 @@ C++20과 CMake로 경량 ECS 런타임과 headless 3D Boids 시뮬레이션을 �
 | vcpkg | 매니페스트 기반 외부 패키지 설치 |
 | GLM | 3D 벡터·회전과 CPU Transform 계산 |
 | GoogleTest / CTest | 단위·통합 테스트와 실행 검증 |
+| Python 3.10+ 표준 라이브러리 | 조건별 반복 실행, CSV 검증과 실행 도구 테스트 |
 | OpenGL 3.3 Core Profile | 기존 시각화의 렌더링 API |
 | GLFW | 기존 시각화의 창·컨텍스트·입력 |
 | GLAD | OpenGL 함수 로딩 |
@@ -30,6 +31,8 @@ C++20과 CMake로 경량 ECS 런타임과 headless 3D Boids 시뮬레이션을 �
 - clangd는 별도의 `clangd` 프리셋(Ninja·clang-cl)으로 생성한
   `build/clangd/compile_commands.json`을 사용한다.
 - 새 의존성은 연구에 필요하거나 구현 위험을 실질적으로 줄이는 경우에만 추가한다.
+- 전체 테스트 빌드는 Python 3.10 이상의 인터프리터를 CMake에서 찾는다.
+  반복 벤치마크 도구도 같은 Python 표준 라이브러리만 사용하며 pip 패키지는 필요 없다.
 
 빌드·실행 명령은 [README](../README.md)를 따른다.
 
@@ -68,6 +71,12 @@ Sparse Set ECS 실행 코드나 그래픽 라이브러리는 링크하지 않는
 step별 시간과 실제 설정·환경·메모리 원자료를 CSV로 저장하고 공통 입력 저장량을
 시뮬레이션 저장량과 구분한다. App은 표준 파일 스트림으로 임시 CSV를 완성한 뒤
 Windows `MoveFileExW`로 최종 경로에 반영한다. 추가 패키지는 없다.
+
+`scripts/run_benchmarks.py`는 Windows에서 JSON 설정별로 같은 VS2022 x64 Release
+실행 파일을 순차 실행한다. `subprocess`로 자식 종료를 기다리고, `ctypes`로 이름 있는
+Windows mutex를 사용해 실행 도구의 중복 실행을 막는다. 설정·명령·로그·원자료·판정과
+실행 파일 SHA-256을 새 결과 폴더에 보존한다. 실행법은
+[반복 벤치마크](benchmark-batches.md)를 참고한다.
 
 모듈 경계는 [아키텍처](architecture.md), 연구 범위와 측정 기준은
 [연구·실험·논문 기준](research-goals.md)을 따른다.
