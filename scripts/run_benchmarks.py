@@ -215,12 +215,28 @@ def validate_csv(path, config, condition):
             value = number(kind, name, step)
             if kind == "section_calls":
                 require(value.is_integer(), f"Non-integer call count: {name}/{step}")
+
+    def timing_summary(kind, name, expected):
+        statuses = ("not_measured",) if expected is None else ("available",)
+        actual = number(kind, name, statuses=statuses)
+        # CSV preserves double precision; allow summation/rounding differences
+        # between the C++ producer and Python without accepting inconsistent data.
+        require(expected is None or math.isclose(actual, expected, rel_tol=1e-9, abs_tol=1e-12),
+                f"CSV timing summary mismatch: {kind}/{name}")
+
+    total_ms = sum(number("step", "overall_ms", step) for step in range(steps))
+    mean_ms = total_ms / steps
+    number("summary", "initialization_ms")
+    timing_summary("summary", "total_step_ms", total_ms)
+    timing_summary("summary", "mean_step_ms", mean_ms)
+    timing_summary("summary", "updates_per_second", 1000 / mean_ms if mean_ms > 0 else None)
+    phase_means = {}
     for phase in PHASES:
-        number("section_mean_ms_per_step", phase)
-    for name in ("initialization_ms", "total_step_ms", "mean_step_ms"):
-        number("summary", name)
-    for name in ("updates_per_second", "neighbor_ms_per_pair"):
-        number("summary", name, statuses=("available", "not_measured"))
+        phase_means[phase] = sum(number("section_ms", phase, step) for step in range(steps)) / steps
+        timing_summary("section_mean_ms_per_step", phase, phase_means[phase])
+    boids = condition["boid_count"]
+    timing_summary("summary", "neighbor_ms_per_pair",
+                   phase_means["neighbor_calculation"] / (boids * (boids - 1)) if boids > 1 else None)
     for name in ("peak_private_commit", "peak_working_set"):
         for kind in ("process_memory_bytes", "process_bytes_per_entity"):
             number(kind, name, statuses=("available", "not_measured", "unsupported", "failed"))

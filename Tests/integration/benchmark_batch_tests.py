@@ -5,6 +5,7 @@ import csv
 import importlib.util
 import io
 import json
+import math
 from pathlib import Path
 import subprocess
 import sys
@@ -27,7 +28,9 @@ def fixture_rows(config, condition):
         rows.append(dict(kind=kind, name=name, step=str(step), value=str(value), status=status, reason=reason))
 
     add("metadata", "format_version", 2)
-    settings = dict(condition, entity_count=28, dummy_change_count=0, seed=config["seed"],
+    settings = dict(condition, entity_count=condition["boid_count"] + condition["dummy_count"],
+                    dummy_change_count=condition["dummy_count"] * condition["dummy_change_percent"] // 100,
+                    seed=config["seed"],
                     warmup_steps=config["warmup_steps"], measurement_steps=config["measurement_steps"],
                     fixed_delta_seconds=batch.float32(config["dt"]))
     for name in ("simulation_scope", "reserve_policy", "initialization_scope", "step_scope",
@@ -45,15 +48,27 @@ def fixture_rows(config, condition):
                        process_id=123, run_start_unix_ms=123456, run_id="123456-123")
     for name, value in environment.items():
         add("environment", name, value)
-    for step in range(config["measurement_steps"]):
-        add("step", "overall_ms", 0.1, step)
+    step_ms = [0.1 * (step + 1) for step in range(config["measurement_steps"])]
+    phase_ms = dict(entity_changes=0, query_preparation=0, neighbor_calculation=0.02, state_update=0.03)
+    for step, elapsed in enumerate(step_ms):
+        add("step", "overall_ms", elapsed, step)
         for phase in batch.PHASES:
-            add("section_ms", phase, 0, step)
-            add("section_calls", phase, 0, step)
+            add("section_ms", phase, phase_ms[phase] * (step + 1), step)
+            add("section_calls", phase, int(phase_ms[phase] > 0), step)
+    phase_means = {}
     for phase in batch.PHASES:
-        add("section_mean_ms_per_step", phase, 0)
-    for name in ("initialization_ms", "total_step_ms", "mean_step_ms", "updates_per_second", "neighbor_ms_per_pair",
-                 "storage_size_bytes_per_entity", "storage_capacity_bytes_per_entity"):
+        phase_means[phase] = sum(phase_ms[phase] * (step + 1) for step in range(len(step_ms))) / len(step_ms)
+        add("section_mean_ms_per_step", phase, phase_means[phase])
+    mean_ms = sum(step_ms) / len(step_ms)
+    add("summary", "total_step_ms", sum(step_ms))
+    add("summary", "mean_step_ms", mean_ms)
+    add("summary", "updates_per_second", 1000 / mean_ms)
+    boids = condition["boid_count"]
+    if boids > 1:
+        add("summary", "neighbor_ms_per_pair", phase_means["neighbor_calculation"] / (boids * (boids - 1)))
+    else:
+        add("summary", "neighbor_ms_per_pair", "", status="not_measured", reason="Needs N > 1")
+    for name in ("initialization_ms", "storage_size_bytes_per_entity", "storage_capacity_bytes_per_entity"):
         add("summary", name, 1)
     for name in ("peak_private_commit", "peak_working_set"):
         for kind in ("process_memory_bytes", "process_bytes_per_entity"):
@@ -144,6 +159,74 @@ class BatchTests(unittest.TestCase):
         write_csv(self.csv_path, fixture_rows(self.config, self.config["conditions"][0]))
         batch.validate_csv(self.csv_path, self.config, self.config["conditions"][0])
 
+    def test_csv_rejects_timing_summaries_that_disagree_with_raw_steps(self):
+        condition = self.config["conditions"][0]
+        original = fixture_rows(self.config, condition)
+        summaries = [("summary", name) for name in (
+            "total_step_ms", "mean_step_ms", "updates_per_second", "neighbor_ms_per_pair")]
+        summaries += [("section_mean_ms_per_step", phase) for phase in batch.PHASES]
+        for kind, name in summaries:
+            with self.subTest(kind=kind, name=name):
+                rows = copy.deepcopy(original)
+                next(row for row in rows if row["kind"] == kind and row["name"] == name)["value"] = "999999"
+                write_csv(self.csv_path, rows)
+                with self.assertRaisesRegex(ValueError, "CSV timing summary mismatch"):
+                    batch.validate_csv(self.csv_path, self.config, condition)
+        for kind, name in (("step", "overall_ms"), ("section_ms", "neighbor_calculation")):
+            with self.subTest(raw_kind=kind, raw_name=name):
+                rows = copy.deepcopy(original)
+                next(row for row in rows if row["kind"] == kind and row["name"] == name)["value"] = "1"
+                write_csv(self.csv_path, rows)
+                with self.assertRaisesRegex(ValueError, "CSV timing summary mismatch"):
+                    batch.validate_csv(self.csv_path, self.config, condition)
+
+    def test_csv_accepts_timing_summary_rounding(self):
+        condition = self.config["conditions"][0]
+        rows = fixture_rows(self.config, condition)
+        for row in rows:
+            if row["kind"] == "section_mean_ms_per_step" or (row["kind"] == "summary" and row["name"] in (
+                    "total_step_ms", "mean_step_ms", "updates_per_second", "neighbor_ms_per_pair")):
+                row["value"] = str(math.nextafter(float(row["value"]), math.inf))
+        write_csv(self.csv_path, rows)
+        batch.validate_csv(self.csv_path, self.config, condition)
+
+    def test_csv_requires_unavailable_timing_only_when_not_derivable(self):
+        condition = self.config["conditions"][0]
+        for name in ("updates_per_second", "neighbor_ms_per_pair"):
+            with self.subTest(unexpected_missing=name):
+                rows = fixture_rows(self.config, condition)
+                next(row for row in rows if row["kind"] == "summary" and row["name"] == name).update(
+                    value="", status="not_measured", reason="Missing timing")
+                write_csv(self.csv_path, rows)
+                with self.assertRaises(ValueError):
+                    batch.validate_csv(self.csv_path, self.config, condition)
+        rows = fixture_rows(self.config, condition)
+        for row in rows:
+            if row["kind"] in ("step", "section_ms", "section_calls", "section_mean_ms_per_step") or (
+                    row["kind"] == "summary" and row["name"] in (
+                        "total_step_ms", "mean_step_ms", "neighbor_ms_per_pair")):
+                row["value"] = "0"
+            if row["kind"] == "summary" and row["name"] == "updates_per_second":
+                row.update(value="", status="not_measured", reason="Mean step time is zero")
+        write_csv(self.csv_path, rows)
+        batch.validate_csv(self.csv_path, self.config, condition)
+        next(row for row in rows if row["kind"] == "summary" and row["name"] == "updates_per_second").update(
+            value="0", status="available", reason="")
+        write_csv(self.csv_path, rows)
+        with self.assertRaises(ValueError):
+            batch.validate_csv(self.csv_path, self.config, condition)
+        for boids in (0, 1):
+            with self.subTest(boid_count=boids):
+                small = dict(condition, boid_count=boids)
+                rows = fixture_rows(self.config, small)
+                write_csv(self.csv_path, rows)
+                batch.validate_csv(self.csv_path, self.config, small)
+                next(row for row in rows if row["kind"] == "summary" and row["name"] == "neighbor_ms_per_pair").update(
+                    value="0", status="available", reason="")
+                write_csv(self.csv_path, rows)
+                with self.assertRaises(ValueError):
+                    batch.validate_csv(self.csv_path, self.config, small)
+
     def test_csv_rejects_corrupt_incomplete_or_mismatched_raw_results(self):
         condition = self.config["conditions"][0]
         original = fixture_rows(self.config, condition)
@@ -201,7 +284,7 @@ class BatchTests(unittest.TestCase):
             condition = config["conditions"][index % 3]
             rows = fixture_rows(config, condition)
             if index == 4:
-                rows = rows[:-1]  # Truncated CSV despite exit 0.
+                next(row for row in rows if row["kind"] == "summary" and row["name"] == "mean_step_ms")["value"] = "999999"
             write_csv(path, rows)
             return subprocess.CompletedProcess(command, 0)
 
@@ -213,6 +296,7 @@ class BatchTests(unittest.TestCase):
         self.assertEqual(len(calls), 6)
         self.assertEqual([row["status"] for row in results], ["failed"] * 5 + ["success"])
         self.assertEqual([row["exit_code"] for row in results], ["7", "0", "", "", "0", "0"])
+        self.assertIn("CSV timing summary mismatch", results[4]["error"])
         self.assertEqual(json.loads((folder / "summary.json").read_text())["failures"], 5)
         self.assertEqual((folder / "config.json").read_bytes(), raw)
         saved = {path: path.read_bytes() for path in folder.iterdir()}
