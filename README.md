@@ -25,18 +25,22 @@ clangd 사용 시 파일 배치나 CMake 구성을 변경한 뒤 `cmake --preset
 ## 실행
 
 성능 측정은 Release 빌드에서 `--benchmark`로 실행합니다.
-현재 실행 옵션은 `ecs`(Sparse Set)와 `oop`를 지원합니다.
+`oop`, `ecs`(Sparse Set), `archetype`을 같은 실행 경로로 지원합니다.
 
 ```powershell
 cmake --build --preset vs2022-release
-.\build\vs2022\App\Release\App.exe --benchmark --implementation ecs --agents 1000 --seed 42 --output out/ecs.csv
-.\build\vs2022\App\Release\App.exe --benchmark --implementation oop --agents 1000 --seed 42
+.\build\vs2022\App\Release\App.exe --benchmark --implementation ecs --agents 1000 --dummies 1000 --dummy-change-percent 40 --seed 42 --dt 0.016666667 --warmup 100 --steps 1000 --output out/ecs.csv
+.\build\vs2022\App\Release\App.exe --benchmark --implementation oop --agents 1000 --dummies 1000 --dummy-change-percent 40 --seed 42
+.\build\vs2022\App\Release\App.exe --benchmark --implementation archetype --agents 1000 --dummies 1000 --dummy-change-percent 40 --seed 42
 .\build\vs2022\App\Release\App.exe --help
 ```
 
 `--help`에서 전체 옵션을 확인할 수 있습니다. 옵션 없이 실행하면 기존 3D 시각화가 열립니다.
 원자료는 `--output`으로 지정한 CSV에 저장하며, 생략하면 `out/benchmarks/`에 실행별로
 저장합니다. 벤치마크 실행은 한 번에 하나씩 수행합니다.
+`--agents`는 Boid 수이며 Boid·Dummy 수와 warmup은 0을 허용합니다.
+변경 비율은 0~100, 측정 step 수와 dt는 양수입니다. 공통 초기 상태·변경 계획은
+초기화 계측 전에 준비하며, CSV에 실제 조건과 공통 입력의 별도 저장량을 기록합니다.
 
 ## 구조
 

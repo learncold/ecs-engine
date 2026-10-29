@@ -151,20 +151,23 @@ const auto result = benchmarker::RunBenchmark<boids::ecs::BoidSimulation>(
     simulation_config, benchmark_config, "ecs");
 ```
 
-현재 `RunBenchmark` 템플릿은 `Initialize()`, `Update(float, TimingRecorder&)`,
+`RunBenchmark` 템플릿은 `Initialize(const SimulationInput&)`,
+`Update(float, std::span<const std::size_t>, TimingRecorder&)`,
 `GetStorageReport() const`를 호출한다. 공통 부모나 콜백은 필요하지 않다. Update에서 네 구간 이름
 `entity_changes`, `query_preparation`, `neighbor_calculation`, `state_update`를 사용한다.
 실제 작업이 없는 구간은 `record_zero`로 보고한다. 기존 무계측 Update 오버로드도 유지한다.
 
-현재 실행 함수는 기존 편의 API로 Boid 전용 ECS/OOP를 실행한다. CSV에도 이 실행
-범위를 명시한다. `dummy_count`나 `dummy_change_percent`가 0이 아닌 설정은
-실행 전에 `std::invalid_argument`로 거부해 실제 조건과 CSV의 Boid 전용 조건이
-달라지지 않도록 한다. OOP와 Sparse Set은 아래 공통 입력 API로 Dummy 변경을 지원하지만, 이 경로를
-Benchmarker/App에 연결하는 작업은 별도다. Archetype은 아직 포함하지 않는다.
+세 구현(OOP, Sparse Set ECS, Archetype)에 같은 템플릿을 사용한다.
+설정·dt·step 수와 합산 overflow를 먼저 검증한다. Boid·Dummy 수와 warmup은
+0을 허용하고, 측정 step 수와 dt는 양수, Dummy 변경 비율은 0~100이다.
+생성자와 설정 검증, 공통 입력 생성, 환경·계측 준비는 초기화 시간에서 제외한다.
+`Initialize(input)`의 입력 검증·clear·reserve·할당·객체/Entity/component 생성만
+초기화 계측에 포함한다. 공통 입력은 warmup·측정 길이의 합으로 한 번 준비하고
+마지막 저장량 보고까지 유지한다. 아래는 실행기 내부의 순서다.
 
 ```cpp
-const auto input = boids::PrepareSimulationInput(config, warmup + measured);
 boids::oop::BoidSimulation simulation(config);
+const auto input = boids::PrepareSimulationInput(config, warmup + measured);
 simulation.Initialize(input); // 공통 입력 생성 후 이 호출만 초기화 계측
 timing.set_enabled(false);
 for (std::size_t step = 0; step < warmup; ++step)
@@ -175,7 +178,9 @@ for (std::size_t step = warmup; step < warmup + measured; ++step) {
     simulation.Update(dt, input.dummy_steps[step], timing);
     timing.end_step_measurement();
 }
+const auto process_memory = engine::measurement::QueryProcessMemory();
 const auto storage = simulation.GetStorageReport();
+const auto input_storage = benchmarker::InputStorageReport(input);
 ```
 
 호출자는 입력을 마지막 Update·저장량 보고까지 유지하며 변경하지 않는다. OOP는
@@ -191,37 +196,53 @@ Dummy 교체로 물리적 배열 순서가 바뀌어도 합산 순서는 유지�
 변경 수가 양수인 설정은 계획을 받는 Update가 필요하다. 이 편의 경로의 초기화
 시간에는 공통 입력 생성도 포함되므로 최종 실험의 입력 선행 생성 경로와 구분한다.
 
-`Boids::Archetype`의 시뮬레이션은 `Initialize(input)`과
-`Update(dt, dummy_ids, timing)`을 제공한다. 공통 입력과 step 계획을 받으므로
-위 템플릿에 직접 전달하는 대신 호출자가 입력을 준비하고 실행 API를 직접 호출한다.
-입력은 초기화 계측 전에 warmup·측정 step 수의 합으로 한 번 생성하고, 마지막
-Update·저장량 보고까지 살아 있고 변경되지 않아야 한다. warmup에서는 계측을 끄고
-앞부분 계획을 적용하며, 측정에서는 상태를 유지한 채 `dummy_steps[warmup + step]`을
-전달한다. 호출자가 전체 step 계측과 측정 종료 후 프로세스 최대 메모리 조회를 수행한다.
+`Boids::Archetype`의 시뮬레이션도 같은 템플릿으로 실행한다.
+warmup에서는 계측을 끄고 앞부분 계획을 적용하며, 측정에서는 상태를 유지한 채
+`dummy_steps[warmup + step]`을 전달한다. 실행기가 전체 step 계측과 측정 종료 후
+프로세스 최대 메모리 조회를 수행한다. 그 뒤 시뮬레이션·공통 입력 저장량과 시간
+보고서를 만든다. 공통 입력 생성의 임시 저장소도 프로세스 최고값에 영향을 줄 수 있다.
 Archetype의 저장·실행 계약은 [아키텍처](architecture.md#archetype-boids-시뮬레이션)를 참고한다.
 
 `Boids::ECS`도 같은 `Initialize(input)`과 `Update(dt, dummy_ids, timing)` API를
 제공한다. `EntityFor(logical_id)`로 Dummy 재생성 이후 현재 Entity를 조회할 수 있다.
 입력을 받는 경로에는 MeshRenderer를 추가하지 않으며 Dummy는 이웃·상태 갱신에서
-제외한다. 이 경로도 위 실행 템플릿 대신 호출자가 계획과 계측을 직접 연결한다.
+제외한다. Benchmarker는 이 API에 계획과 계측을 연결한다.
 계획 없는 Update는 `floor(dummy_count * dummy_change_percent / 100)`이 0일 때만
 허용한다. 빌린 입력은 저장량에서 제외하고 논리 번호 대응·Registry·캐시·두 SystemManager의
 소유 저장량을 보고한다. 매니저별 항목은 `systems`와 `state_systems`로 구분한다.
 
 ```powershell
 cmake --build --preset vs2022-release
-.\build\vs2022\App\Release\App.exe --benchmark --implementation ecs --agents 100 --warmup 10 --steps 100 --output out/ecs.csv
+.\build\vs2022\App\Release\App.exe --benchmark --implementation archetype --agents 100 --dummies 100 --dummy-change-percent 40 --seed 42 --dt 0.02 --warmup 10 --steps 100 --output out/archetype.csv
 ```
 
 `--output` 생략 시 `out/benchmarks/<implementation>-<run-id>.csv`를 생성한다.
 명시한 출력 경로는 파일을 덮어쓰므로 반복 실행에서는 경로를 달리하거나 기본 경로를 사용한다.
 측정 프로세스는 동시에 실행하지 않는다.
+구현은 `oop|ecs|archetype`이며 `--agents`는 Boid 수다. 모든 설정 옵션은
+`--benchmark`와 함께 사용한다. 옵션 없이 실행하면 기존 ECS 시각화를 사용한다.
+실행 예외 시 결과를 저장하지 않는다. 출력은 같은 디렉터리의 임시 파일에 완성하고
+닫은 뒤 최종 경로에 반영하며, 파일 실패 시 임시 파일을 정리하고 오류와 종료 코드 1을
+반환한다. 반영 전 기존 결과를 보존한다.
 
-CSV 열은 `kind,name,step,value,status,reason`이다. step은 0부터 시작한다.
+CSV v2의 열은 `kind,name,step,value,status,reason`이다. step은 측정 구간의
+0부터 시작한다. warmup 다음 계획부터 이어 쓰되 CSV step 번호는 0으로 시작한다.
 설정, 환경, 초기화/시간 요약, step별 전체 시간과 구간 시간/호출 수, 프로세스 최대
 메모리, 저장소별 size/capacity, bytes per entity와 pair당 비용을 보존한다.
 누락 값은 빈 value와 상태/사유로, 실제 0은 숫자 0으로 저장한다. 부분합은 `partial`이다.
 수치 문자열은 locale에 독립적이며 부동소수점 원자료를 보존할 정밀도를 사용한다.
+
+`dummy_count`, `dummy_change_percent`, `dummy_change_count`는 실제 실행 설정과
+내림한 step당 교체 수다. `entity_count`는 Boid+Dummy다. 행동 파라미터 전체와
+초기화·step·프로세스·저장량 범위, 구현별 reserve 정책도 기록한다.
+`storage_size_bytes`/`storage_capacity_bytes`와 같은 이름의 항목별 kind는
+시뮬레이션 소유 저장량이며, `input_storage_size_bytes`/`input_storage_capacity_bytes`는
+공통 입력의 별도 합계와 항목별 kind다. 입력 객체의 vector 제어 필드, 초기 상태 배열,
+계획 vector 배열과 각 step의 ID 배열을 중복 없이 계산한다. 입력 생성 임시 배열과
+난수 생성기는 종료 시 저장량에 포함하지 않는다.
+컨테이너 및 프로세스 bytes per entity는 Boid+Dummy로 나누고, 이웃 pair당 비용은
+Boid의 `N*(N-1)`로 나눈다. 분모가 0이면 `not_measured`와 사유를 기록하며,
+프로세스 값 미지원·실패 상태는 파생 지표에도 유지한다.
 
 원자료와 설정/메타데이터는 같은 실행의 결과다. CPU·OS 정보는 현재 Windows에서
 수집하고 컴파일러·CMake 구성·빌드 플래그·C++ 표준도 기록한다. OS는 Windows와

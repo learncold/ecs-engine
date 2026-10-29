@@ -1,6 +1,7 @@
 add_executable(App
     main.cpp
     command_line_options.cpp
+    benchmark_output.cpp
     UI/performance_panel.cpp
 )
 
@@ -15,6 +16,7 @@ target_link_libraries(App
     PRIVATE
         Boids::ECS
         Boids::OOP
+        Boids::Archetype
         Engine::Measurement
         Benchmarker::Experiment
         Engine::Core

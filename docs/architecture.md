@@ -72,7 +72,10 @@ warmup 이후 상태나 계획을 다시 시작하지 않고 다음 step 목록�
 파라미터의 저장은 각 구현의 책임이다. 입력 수명은 마지막 갱신과 저장량 보고까지
 유지하고 시뮬레이션 저장량과 별도로 보고해야 한다.
 OOP, Sparse Set과 Archetype은 공통 입력을 받는 초기화·갱신 API를 제공한다.
-Benchmarker·CLI의 공통 입력·Dummy 변경 연결은 후속 작업이며 기존 실행 경로는 유지한다.
+Benchmarker는 warmup·측정 전체 계획을 초기화 계측 전에 준비하고,
+`Initialize(input)`과 `Update(dt, dummy_ids, timing)`으로 세 구현을 실행한다.
+warmup 이후 상태와 계획을 이어 사용한다. CLI는 `--implementation oop|ecs|archetype`,
+`--agents`, `--dummies`, `--dummy-change-percent`로 조건을 지정한다.
 
 - Sparse Set ECS: Registry가 개체 수명과 타입별 ComponentStorage를 소유한다.
   컴포넌트는 dense 배열에 저장하고, sparse index로 개체와 배열 위치를 연결한다.
@@ -304,11 +307,24 @@ Dummy 제외 검증은 같은 Boid 상태를 가진 Boid 전용 실행과, 가�
 상태·교체 비율이 Boid 결과에 영향을 주지 않는지 확인하며, 경계 반사·속도 제한·
 겹친 위치·이웃 없음·속도 0·dt 0·큰 유한 초기 속도도 세 구현으로 비교한다.
 
-현재 App/Benchmarker 비교 실행은 Boid 전용 ECS/OOP이며 Dummy 변경과 Archetype
-선택을 연결하지 않았다. 세 구현의 공통 입력·Dummy 변경 API는 Common의
+App/Benchmarker는 세 구현의 Boid·Dummy 실행을 연결한다.
+세 구현의 공통 입력·Dummy 변경 API는 Common의
 `simulation_input.h` 계약을 사용하며 warmup과 측정의 계획 번호는 호출자가 이어서
 전달한다. OOP와 Sparse Set의 계획 없는 Update는 실제 Dummy 변경 수가 양수이면
-오류로 처리한다. App/Benchmarker 연결은 후속 작업이다.
+오류로 처리한다. Benchmarker는 계획을 받는 API를 사용한다.
+
+Benchmarker의 `ExperimentResult`는 시뮬레이션 `storage`와 공통 입력의
+`input_storage`를 구분한다. 입력 객체, 초기 상태 배열, 계획 vector 배열과
+각 step의 ID 배열을 각각 한 번 계산한다. 프로세스 최대값은 시간 측정 종료 직후,
+저장량·시간 보고서 생성 전에 조회한다. CSV v2는 실제 Boid·Dummy 수·변경 수,
+초기화·전체 step 범위와 reserve 정책을 기록한다. bytes per entity의 분모는
+Boid+Dummy이며 이웃 pair 비용의 분모는 Boid 수의 `N*(N-1)`이다.
+0 분모는 빈 값·상태·사유로 기록한다.
+
+App은 실행이 성공한 뒤 같은 디렉터리의 임시 파일에 CSV를 쓰고 닫은 후 최종
+경로로 이동한다. Windows에서는 `MoveFileExW(MOVEFILE_REPLACE_EXISTING)`을
+사용한다. 쓰기·닫기·반영 실패 시 임시 파일을 정리하고 오류 종료하며, 반영 전의
+기존 결과를 유지한다. 시뮬레이션 예외가 발생하면 결과 파일을 만들지 않는다.
 
 Sparse Set 회귀 테스트는 변경 비율 0·40·100%에서 warmup 100회와 측정 1,000회를
 연속 실행한다. Dummy의 초기 위치·속도와 교체 비율이 달라도 변경 없는 기준 실행과

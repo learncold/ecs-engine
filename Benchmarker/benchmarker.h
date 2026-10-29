@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "Boids/Common/boid_simulation_config.h"
+#include "Boids/Common/simulation_input.h"
 #include "Engine/Measurement/memory_measurement.h"
 #include "Engine/Measurement/timing_recorder.h"
 
@@ -22,7 +23,11 @@ struct BenchmarkConfig {
 
 using Environment = std::vector<std::pair<std::string, std::string>>;
 void ValidateConfig(const BenchmarkConfig& config);
+void ValidateExperimentConfig(const boids::BoidSimulationConfig& simulation,
+                              const BenchmarkConfig& benchmark);
 [[nodiscard]] Environment CollectEnvironment();
+[[nodiscard]] engine::measurement::StorageReport InputStorageReport(
+    const boids::SimulationInput& input);
 
 struct ExperimentResult {
   boids::BoidSimulationConfig simulation_config;
@@ -33,22 +38,20 @@ struct ExperimentResult {
   engine::measurement::TimingResult timing;
   engine::measurement::ProcessMemoryResult process_memory;
   engine::measurement::StorageReport storage;
+  engine::measurement::StorageReport input_storage;
 };
 
 // This experiment module owns orchestration. Engine only records intervals.
-// Simulation must expose Initialize(), Update(dt, TimingRecorder&) and
+// Simulation must expose Initialize(input), Update(dt, dummy_ids, recorder) and
 // GetStorageReport(). No callback or base-class interface is required.
-// This convenience runner requires zero Dummy count and change percent.
 template <typename Simulation>
 [[nodiscard]] ExperimentResult RunBenchmark(
     const boids::BoidSimulationConfig& simulation_config,
     const BenchmarkConfig& config, std::string_view implementation) {
-  ValidateConfig(config);
-  if (simulation_config.dummy_count != 0U ||
-      simulation_config.dummy_change_percent != 0U) {
-    throw std::invalid_argument(
-        "Current benchmark runner requires Boid-only settings");
-  }
+  ValidateExperimentConfig(simulation_config, config);
+  Simulation simulation(simulation_config);
+  const auto input = boids::PrepareSimulationInput(
+      simulation_config, config.warmup_steps + config.measurement_steps);
   ExperimentResult result;
   result.simulation_config = simulation_config;
   result.config = config;
@@ -59,26 +62,28 @@ template <typename Simulation>
   engine::measurement::TimingRecorder recorder(
       {"entity_changes", "query_preparation", "neighbor_calculation",
        "state_update"});
-  Simulation simulation(simulation_config);
-  // Constructor, environment discovery and instrumentation setup are excluded.
+  // Input generation, constructor, environment and recorder setup are excluded.
   initialization.start("initialization");
-  simulation.Initialize();
+  simulation.Initialize(input);
   initialization.stop("initialization");
   result.initialization_ms = initialization.total_ms("initialization");
 
   recorder.set_enabled(false);
   for (std::size_t step = 0; step < config.warmup_steps; ++step) {
-    simulation.Update(config.fixed_delta_seconds, recorder);
+    simulation.Update(config.fixed_delta_seconds, input.dummy_steps[step],
+                      recorder);
   }
   recorder.begin_measurement(config.measurement_steps);
   for (std::size_t step = 0; step < config.measurement_steps; ++step) {
     recorder.begin_step_measurement();
-    simulation.Update(config.fixed_delta_seconds, recorder);
+    simulation.Update(config.fixed_delta_seconds,
+                      input.dummy_steps[config.warmup_steps + step], recorder);
     recorder.end_step_measurement();
   }
   // Query process peaks before allocations for summaries/storage reports.
   result.process_memory = engine::measurement::QueryProcessMemory();
   result.storage = simulation.GetStorageReport();
+  result.input_storage = InputStorageReport(input);
   result.timing = recorder.result();
   return result;
 }
