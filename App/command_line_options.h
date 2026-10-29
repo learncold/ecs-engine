@@ -13,6 +13,7 @@ namespace app {
 enum class SimulationImplementation {
   Ecs,
   Oop,
+  Archetype,
 };
 
 struct CommandLineOptions {

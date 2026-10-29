@@ -46,44 +46,64 @@ Environment Settings(const ExperimentResult& result) {
   const auto& s = result.simulation_config;
   const auto& c = result.config;
   const auto& p = s.parameters;
-  return {{"implementation", result.implementation},
-          {"boid_count", Number(s.boid_count)},
-          {"dummy_count", "0"},
-          {"dummy_change_percent", "0"},
-          {"simulation_scope",
-           "current Boid-only implementation; no Dummy churn or Archetype"},
-          {"reserve_policy",
-           result.implementation == "oop"
-               ? "Parent pointer vector reserves object count; logical indices "
-                 "resize to object count; each object is allocated separately"
-           : result.implementation == "ecs"
-               ? "Registry/component vectors grow on demand; CachedView "
-                 "reserves driver size during query preparation"
-               : "unspecified by custom simulation"},
-          {"seed", Number(s.random_seed)},
-          {"fixed_delta_seconds", Number(c.fixed_delta_seconds)},
-          {"warmup_steps", Number(c.warmup_steps)},
-          {"measurement_steps", Number(c.measurement_steps)},
-          {"spawn_half_extent", Number(s.spawn_half_extent)},
-          {"boundary_half_extent", Number(s.boundary_half_extent)},
-          {"initial_speed", Number(s.initial_speed)},
-          {"neighbor_radius", Number(p.neighbor_radius)},
-          {"separation_radius", Number(p.separation_radius)},
-          {"separation_weight", Number(p.separation_weight)},
-          {"alignment_weight", Number(p.alignment_weight)},
-          {"cohesion_weight", Number(p.cohesion_weight)},
-          {"preferred_speed", Number(p.preferred_speed)},
-          {"max_speed", Number(p.max_speed)},
-          {"max_alignment_force", Number(p.max_alignment_force)},
-          {"initialization_scope",
-           "Initialize(): clear/reserve, RNG and entity/component creation; "
-           "excludes constructor"},
-          {"process_memory_scope",
-           "process lifetime up to post-timing query; includes warmup and "
-           "instrumentation"},
-          {"storage_scope",
-           "simulation root object and owned element storage at final step; "
-           "excludes allocator overhead/fragmentation"}};
+  return {
+      {"implementation", result.implementation},
+      {"boid_count", Number(s.boid_count)},
+      {"dummy_count", Number(s.dummy_count)},
+      {"entity_count", Number(s.boid_count + s.dummy_count)},
+      {"dummy_change_percent", Number(s.dummy_change_percent)},
+      {"dummy_change_count",
+       Number((s.dummy_count / 100U) * s.dummy_change_percent +
+              ((s.dummy_count % 100U) * s.dummy_change_percent) / 100U)},
+      {"simulation_scope",
+       "single-threaded headless 3D Boids; naive all-pairs over Boids only; "
+       "Dummy replacement before query/neighbor/state phases"},
+      {"reserve_policy",
+       result.implementation == "oop"
+           ? "Parent pointer vector reserves object count; logical indices "
+             "resize to object count; each object is allocated separately"
+       : result.implementation == "ecs"
+           ? "Logical Entity vector reserves total object count; "
+             "Registry/component vectors grow on demand; CachedView "
+             "reserves driver size during query preparation"
+       : result.implementation == "archetype"
+           ? "Logical Entity vector reserves total object count; both "
+             "Boid/Dummy tables prepared even when empty; Registry and "
+             "column vectors grow on demand"
+           : "unspecified by custom simulation"},
+      {"seed", Number(s.random_seed)},
+      {"fixed_delta_seconds", Number(c.fixed_delta_seconds)},
+      {"warmup_steps", Number(c.warmup_steps)},
+      {"measurement_steps", Number(c.measurement_steps)},
+      {"spawn_half_extent", Number(s.spawn_half_extent)},
+      {"boundary_half_extent", Number(s.boundary_half_extent)},
+      {"initial_speed", Number(s.initial_speed)},
+      {"neighbor_radius", Number(p.neighbor_radius)},
+      {"separation_radius", Number(p.separation_radius)},
+      {"separation_weight", Number(p.separation_weight)},
+      {"alignment_weight", Number(p.alignment_weight)},
+      {"cohesion_weight", Number(p.cohesion_weight)},
+      {"preferred_speed", Number(p.preferred_speed)},
+      {"max_speed", Number(p.max_speed)},
+      {"max_alignment_force", Number(p.max_alignment_force)},
+      {"initialization_scope",
+       "Initialize(input): input validation, clear/reserve/allocation and "
+       "object/entity/component creation from prepared input; excludes "
+       "input/plan generation, config validation and constructor"},
+      {"process_memory_scope",
+       "process lifetime up to post-timing query; includes warmup and "
+       "instrumentation, common input and temporary input-generation storage"},
+      {"storage_scope",
+       "simulation root object and owned element storage at final step; "
+       "excludes borrowed common input and allocator overhead/fragmentation"},
+      {"input_storage_scope",
+       "experiment-owned SimulationInput object, initial states, plan vector "
+       "and per-step logical IDs; separate from simulation storage; "
+       "excludes generation temporaries and allocator overhead/fragmentation"},
+      {"step_scope",
+       "entity changes through state update including interval "
+       "instrumentation; "
+       "excludes initialization, warmup, input generation and output"}};
 }
 
 void CsvField(std::ostream& output, std::string_view text) {
@@ -123,6 +143,44 @@ void ValidateConfig(const BenchmarkConfig& config) {
   if (config.measurement_steps == 0U) {
     throw std::invalid_argument("Benchmark measured steps must be positive");
   }
+  if (config.warmup_steps >
+      std::numeric_limits<std::size_t>::max() - config.measurement_steps) {
+    throw std::invalid_argument("Warmup plus measurement steps overflow");
+  }
+}
+
+void ValidateExperimentConfig(const boids::BoidSimulationConfig& simulation,
+                              const BenchmarkConfig& benchmark) {
+  ValidateConfig(benchmark);
+  boids::ValidateSimulationConfig(simulation);
+  if (simulation.boid_count >
+      std::numeric_limits<std::size_t>::max() - simulation.dummy_count) {
+    throw std::invalid_argument("Boid plus Dummy count overflow");
+  }
+}
+
+engine::measurement::StorageReport InputStorageReport(
+    const boids::SimulationInput& input) {
+  engine::measurement::StorageReport report;
+  report.add_objects<boids::SimulationInput>("object", 1U);
+  report.add_vector("initial_objects", input.initial_objects);
+  // Outer elements already include the per-step vector control fields.
+  report.add_vector("dummy_steps", input.dummy_steps);
+  std::size_t size = 0U;
+  std::size_t capacity = 0U;
+  const auto add = [](std::size_t& bytes, std::size_t count) {
+    if (count > (std::numeric_limits<std::size_t>::max() - bytes) /
+                    sizeof(std::size_t)) {
+      throw std::overflow_error("Input storage size overflow");
+    }
+    bytes += count * sizeof(std::size_t);
+  };
+  for (const auto& step : input.dummy_steps) {
+    add(size, step.size());
+    add(capacity, step.capacity());
+  }
+  report.add_bytes("dummy_step_ids", size, capacity);
+  return report;
 }
 
 Environment CollectEnvironment() {
@@ -182,7 +240,13 @@ void PrintSummary(std::ostream& output, const ExperimentResult& result) {
          << "\nInitialization time (ms): " << result.initialization_ms
          << "\nTotal update time (ms): " << result.timing.total_update_ms
          << "\nMean update time (ms/step): " << result.timing.mean_update_ms
-         << "\nUpdates/s: " << result.timing.updates_per_second << '\n';
+         << "\nUpdates/s: ";
+  if (result.timing.mean_update_ms > 0.0) {
+    output << result.timing.updates_per_second;
+  } else {
+    output << "not_measured (mean step time is zero)";
+  }
+  output << '\n';
   for (const auto& section : result.timing.sections) {
     output << section.name << " (ms/step): ";
     if (section.recorded_steps == result.timing.measured_steps) {
@@ -212,6 +276,10 @@ void PrintSummary(std::ostream& output, const ExperimentResult& result) {
          << "\nContainer capacity estimate (bytes"
          << (result.storage.complete() ? "" : ", partial")
          << "): " << result.storage.capacity_bytes() << '\n';
+  output << "Common input size estimate (bytes): "
+         << result.input_storage.size_bytes()
+         << "\nCommon input capacity estimate (bytes): "
+         << result.input_storage.capacity_bytes() << '\n';
   for (const auto& entry : result.storage.entries()) {
     if (entry.status != engine::measurement::MeasurementStatus::Available) {
       output << entry.name << ": "
@@ -223,7 +291,7 @@ void PrintSummary(std::ostream& output, const ExperimentResult& result) {
 
 void WriteCsv(std::ostream& output, const ExperimentResult& result) {
   output << "kind,name,step,value,status,reason\n";
-  Row(output, "metadata", "format_version", {}, "1");
+  Row(output, "metadata", "format_version", {}, "2");
   for (const auto& [name, value] : Settings(result)) {
     Row(output, "setting", name, {}, value);
   }
@@ -237,7 +305,11 @@ void WriteCsv(std::ostream& output, const ExperimentResult& result) {
   Row(output, "summary", "mean_step_ms", {},
       Number(result.timing.mean_update_ms));
   Row(output, "summary", "updates_per_second", {},
-      Number(result.timing.updates_per_second));
+      result.timing.mean_update_ms > 0.0
+          ? Number(result.timing.updates_per_second)
+          : "",
+      result.timing.mean_update_ms > 0.0 ? "available" : "not_measured",
+      result.timing.mean_update_ms > 0.0 ? "" : "Mean step time is zero");
   for (std::size_t step = 0; step < result.timing.step_ms.size(); ++step) {
     Row(output, "step", "overall_ms", Number(step),
         Number(result.timing.step_ms[step]));
@@ -271,20 +343,32 @@ void WriteCsv(std::ostream& output, const ExperimentResult& result) {
     }
   }
   const auto& memory = result.process_memory;
+  const auto entity_count = result.simulation_config.boid_count +
+                            result.simulation_config.dummy_count;
   const auto peak = [&](std::string_view name,
                         const std::optional<std::size_t>& bytes) {
+    const auto status =
+        bytes ? "available"
+              : (memory.status ==
+                         engine::measurement::MeasurementStatus::Available
+                     ? "not_measured"
+                     : engine::measurement::StatusName(memory.status));
+    const auto reason =
+        bytes ? std::string{}
+              : (memory.reason.empty() ? "Process memory value is missing"
+                                       : memory.reason);
     Row(output, "process_memory_bytes", name, {}, bytes ? Number(*bytes) : "",
-        engine::measurement::StatusName(memory.status), memory.reason);
+        status, reason);
     Row(output, "process_bytes_per_entity", name, {},
-        bytes && result.simulation_config.boid_count > 0U
-            ? Number(static_cast<double>(*bytes) /
-                     static_cast<double>(result.simulation_config.boid_count))
-            : "",
-        bytes && result.simulation_config.boid_count > 0U ? "available"
-                                                          : "not_measured",
-        !bytes                                      ? memory.reason
-        : result.simulation_config.boid_count == 0U ? "Entity count is zero"
-                                                    : "");
+        bytes && entity_count > 0U ? Number(static_cast<double>(*bytes) /
+                                            static_cast<double>(entity_count))
+                                   : "",
+        !bytes              ? status
+        : entity_count > 0U ? "available"
+                            : "not_measured",
+        !bytes               ? reason
+        : entity_count == 0U ? "Entity count is zero"
+                             : "");
   };
   peak("peak_private_commit", memory.peak_private_commit_bytes);
   peak("peak_working_set", memory.peak_working_set_bytes);
@@ -304,7 +388,7 @@ void WriteCsv(std::ostream& output, const ExperimentResult& result) {
       Number(result.storage.capacity_bytes()),
       complete ? "available" : "partial",
       complete ? "" : "Known subtotal; see unavailable entries");
-  const auto count = result.simulation_config.boid_count;
+  const auto count = entity_count;
   if (count > 0U) {
     Row(output, "summary", "storage_size_bytes_per_entity", {},
         Number(static_cast<double>(result.storage.size_bytes()) /
@@ -322,6 +406,19 @@ void WriteCsv(std::ostream& output, const ExperimentResult& result) {
     Row(output, "summary", "storage_capacity_bytes_per_entity", {}, {},
         "not_measured", "Entity count is zero");
   }
+  for (const auto& entry : result.input_storage.entries()) {
+    Row(output, "input_storage_size_bytes", entry.name, {},
+        entry.size_bytes ? Number(*entry.size_bytes) : "",
+        engine::measurement::StatusName(entry.status), entry.reason);
+    Row(output, "input_storage_capacity_bytes", entry.name, {},
+        entry.capacity_bytes ? Number(*entry.capacity_bytes) : "",
+        engine::measurement::StatusName(entry.status), entry.reason);
+  }
+  Row(output, "summary", "input_storage_size_bytes", {},
+      Number(result.input_storage.size_bytes()));
+  Row(output, "summary", "input_storage_capacity_bytes", {},
+      Number(result.input_storage.capacity_bytes()));
+  if (!output) throw std::runtime_error("Cannot serialize benchmark CSV");
 }
 
 }  // namespace benchmarker

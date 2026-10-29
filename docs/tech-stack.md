@@ -64,7 +64,10 @@ Sparse Set ECS 실행 코드나 그래픽 라이브러리는 링크하지 않는
 `Benchmarker::Experiment`는 콜백 없이 Boids의 실행 API를 직접 호출하는 별도
 모듈이다. CPU·OS 정보는 Windows Registry API로 읽으며 `advapi32` 시스템
 라이브러리를 링크한다. 추가 vcpkg 패키지는 없다. 현재 실행 진입점은 App의
-`--benchmark`이며 step별 시간과 설정·환경·메모리 원자료를 CSV로 저장한다.
+`--benchmark`이며 OOP·Sparse Set·Archetype을 선택해 Boid·Dummy 변경을 실행한다.
+step별 시간과 실제 설정·환경·메모리 원자료를 CSV로 저장하고 공통 입력 저장량을
+시뮬레이션 저장량과 구분한다. App은 표준 파일 스트림으로 임시 CSV를 완성한 뒤
+Windows `MoveFileExW`로 최종 경로에 반영한다. 추가 패키지는 없다.
 
 모듈 경계는 [아키텍처](architecture.md), 연구 범위와 측정 기준은
 [연구·실험·논문 기준](research-goals.md)을 따른다.

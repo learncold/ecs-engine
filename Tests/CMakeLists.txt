@@ -29,9 +29,11 @@ target_link_libraries(AppCommandLineOptionsTests
 configure_test_target(AppCommandLineOptionsTests)
 gtest_discover_tests(AppCommandLineOptionsTests)
 
-add_executable(BenchmarkerExperimentTests integration/benchmarker_experiment_tests.cpp)
+add_executable(BenchmarkerExperimentTests
+    integration/benchmarker_experiment_tests.cpp
+    ${PROJECT_SOURCE_DIR}/App/benchmark_output.cpp)
 target_link_libraries(BenchmarkerExperimentTests PRIVATE
-    Benchmarker::Experiment Boids::ECS Boids::OOP GTest::gtest_main)
+    Benchmarker::Experiment Boids::ECS Boids::OOP Boids::Archetype GTest::gtest_main)
 configure_test_target(BenchmarkerExperimentTests)
 gtest_discover_tests(BenchmarkerExperimentTests PROPERTIES RUN_SERIAL TRUE)
 
@@ -44,6 +46,12 @@ add_test(NAME AppOopBenchmarkSmoke COMMAND App --benchmark --implementation oop
 set_tests_properties(AppOopBenchmarkSmoke PROPERTIES
     PASS_REGULAR_EXPRESSION "Measured steps: 3" TIMEOUT 30 RUN_SERIAL TRUE)
 set_tests_properties(AppBenchmarkSmoke PROPERTIES RUN_SERIAL TRUE)
+
+add_test(NAME AppBenchmarkIntegration COMMAND ${CMAKE_COMMAND}
+    -DAPP=$<TARGET_FILE:App>
+    -DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/app-benchmark-$<CONFIG>
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/integration/app_benchmark_checks.cmake)
+set_tests_properties(AppBenchmarkIntegration PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
 add_executable(EngineEcsTests
     unit/registry_tests.cpp

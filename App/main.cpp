@@ -1,13 +1,13 @@
 #include <exception>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
-#include <stdexcept>
 #include <string_view>
 #include <vector>
 
 #include "App/UI/performance_panel.h"
+#include "App/benchmark_output.h"
 #include "App/command_line_options.h"
+#include "Boids/Archetype/boid_simulation.h"
 #include "Boids/Common/boid_simulation_config.h"
 #include "Boids/ECS/boid_simulation.h"
 #include "Boids/OOP/boid_simulation.h"
@@ -38,6 +38,10 @@ int main(int argc, char* argv[]) try {
         result = benchmarker::RunBenchmark<boids::oop::BoidSimulation>(
             options.simulation_config, options.benchmark_config, "oop");
         break;
+      case app::SimulationImplementation::Archetype:
+        result = benchmarker::RunBenchmark<boids::archetype::BoidSimulation>(
+            options.simulation_config, options.benchmark_config, "archetype");
+        break;
     }
 
     std::filesystem::path output_path(options.output_path);
@@ -50,14 +54,7 @@ int main(int argc, char* argv[]) try {
         }
       }
     }
-    if (!output_path.parent_path().empty()) {
-      std::filesystem::create_directories(output_path.parent_path());
-    }
-    std::ofstream output(output_path);
-    if (!output) throw std::runtime_error("Cannot open benchmark output file");
-    benchmarker::WriteCsv(output, result);
-    output.close();
-    if (!output) throw std::runtime_error("Cannot write benchmark output file");
+    app::WriteBenchmarkFile(output_path, result);
     benchmarker::PrintSummary(std::cout, result);
     std::cout << "Raw results: " << output_path.string() << '\n';
     return 0;

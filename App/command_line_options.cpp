@@ -36,6 +36,7 @@ CommandLineOptions ParseCommandLineOptions(
       continue;
     }
     if (option != "--implementation" && option != "--agents" &&
+        option != "--dummies" && option != "--dummy-change-percent" &&
         option != "--seed" && option != "--warmup" && option != "--steps" &&
         option != "--dt" && option != "--output") {
       throw std::invalid_argument("Unknown option: " + std::string(option));
@@ -50,13 +51,22 @@ CommandLineOptions ParseCommandLineOptions(
         options.implementation = SimulationImplementation::Ecs;
       } else if (value == "oop") {
         options.implementation = SimulationImplementation::Oop;
+      } else if (value == "archetype") {
+        options.implementation = SimulationImplementation::Archetype;
       } else {
         throw std::invalid_argument(
-            "Invalid value for --implementation: expected ecs or oop");
+            "Invalid value for --implementation: expected oop, ecs or "
+            "archetype");
       }
     } else if (option == "--agents") {
       options.simulation_config.boid_count =
           ParseNumber<std::size_t>(value, option);
+    } else if (option == "--dummies") {
+      options.simulation_config.dummy_count =
+          ParseNumber<std::size_t>(value, option);
+    } else if (option == "--dummy-change-percent") {
+      options.simulation_config.dummy_change_percent =
+          ParseNumber<std::uint32_t>(value, option);
     } else if (option == "--seed") {
       options.simulation_config.random_seed =
           ParseNumber<std::uint32_t>(value, option);
@@ -78,24 +88,28 @@ CommandLineOptions ParseCommandLineOptions(
   if (has_settings && !options.benchmark_enabled) {
     throw std::invalid_argument("Benchmark settings require --benchmark");
   }
-  if (options.simulation_config.boid_count == 0U) {
-    throw std::invalid_argument("Agent count must be positive");
-  }
   // Validate before allocating or initializing the simulation.
-  benchmarker::ValidateConfig(options.benchmark_config);
+  benchmarker::ValidateExperimentConfig(options.simulation_config,
+                                        options.benchmark_config);
   return options;
 }
 
 void PrintUsage(std::ostream& output) {
-  output << "Usage: App.exe [--benchmark [--implementation ecs|oop]\n"
-            "               [--agents N] [--seed N] [--warmup N]\n"
-            "               [--steps N] [--dt SECONDS] [--output FILE.csv]]\n"
-            "       App.exe --help\n"
-            "Without options: interactive 3D simulation.\n"
-            "Benchmark defaults: agents=100, seed=42, warmup=100, steps=1000, "
-            "dt=1/60 s.\n"
-            "Raw CSV is saved to --output or "
-            "out/benchmarks/<implementation>-<run-id>.csv.\n";
+  output
+      << "Usage: App.exe [--benchmark [--implementation oop|ecs|archetype]\n"
+         "               [--agents N] [--dummies N]\n"
+         "               [--dummy-change-percent 0..100]\n"
+         "               [--seed N] [--warmup N]\n"
+         "               [--steps N] [--dt SECONDS] [--output FILE.csv]]\n"
+         "       App.exe --help\n"
+         "Without options: interactive 3D simulation.\n"
+         "Benchmark defaults: implementation=ecs, agents=100 (Boids), "
+         "dummies=0, dummy-change-percent=0, seed=42, warmup=100, steps=1000, "
+         "dt=1/60 s.\n"
+         "Boid/Dummy counts and warmup may be zero; steps and dt must be "
+         "positive.\n"
+         "Raw CSV is saved to --output or "
+         "out/benchmarks/<implementation>-<run-id>.csv.\n";
 }
 
 }  // namespace app
