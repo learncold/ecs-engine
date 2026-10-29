@@ -1,4 +1,17 @@
 find_package(GTest CONFIG REQUIRED)
+find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
+
+add_test(NAME BenchmarkBatchTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/integration/benchmark_batch_tests.py)
+set_tests_properties(BenchmarkBatchTests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
+
+if(CMAKE_GENERATOR STREQUAL "Visual Studio 17 2022")
+    add_test(NAME BenchmarkBatchAcceptance COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_CURRENT_SOURCE_DIR}/integration/benchmark_batch_tests.py --integration
+        $<TARGET_FILE:App> ${CMAKE_CURRENT_BINARY_DIR}/batch-acceptance
+        CONFIGURATIONS Release)
+    set_tests_properties(BenchmarkBatchAcceptance PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+endif()
 
 include(GoogleTest)
 

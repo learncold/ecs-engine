@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "executable": "../build/vs2022/App/Release/App.exe",
+  "output_directory": "../out/benchmark-suites",
+  "repetitions": 2,
+  "seed": 42,
+  "dt": 0.016666667,
+  "warmup_steps": 7,
+  "measurement_steps": 20,
+  "timeout_seconds": 60,
+  "conditions": [
+    {"implementation": "oop", "boid_count": 16, "dummy_count": 12, "dummy_change_percent": 0},
+    {"implementation": "ecs", "boid_count": 16, "dummy_count": 12, "dummy_change_percent": 0},
+    {"implementation": "archetype", "boid_count": 16, "dummy_count": 12, "dummy_change_percent": 0},
+    {"implementation": "oop", "boid_count": 16, "dummy_count": 12, "dummy_change_percent": 40},
+    {"implementation": "ecs", "boid_count": 16, "dummy_count": 12, "dummy_change_percent": 40},
+    {"implementation": "archetype", "boid_count": 16, "dummy_count": 12, "dummy_change_percent": 40}
+  ]
+}
