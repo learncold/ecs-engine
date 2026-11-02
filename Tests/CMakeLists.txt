@@ -5,12 +5,21 @@ add_test(NAME BenchmarkBatchTests COMMAND ${Python3_EXECUTABLE} -B
     ${CMAKE_CURRENT_SOURCE_DIR}/integration/benchmark_batch_tests.py)
 set_tests_properties(BenchmarkBatchTests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
 
+add_test(NAME BenchmarkerGuiTests COMMAND ${Python3_EXECUTABLE} -B
+    ${CMAKE_CURRENT_SOURCE_DIR}/integration/benchmarker_gui_tests.py)
+set_tests_properties(BenchmarkerGuiTests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
+
 if(CMAKE_GENERATOR STREQUAL "Visual Studio 17 2022")
     add_test(NAME BenchmarkBatchAcceptance COMMAND ${Python3_EXECUTABLE} -B
         ${CMAKE_CURRENT_SOURCE_DIR}/integration/benchmark_batch_tests.py --integration
         $<TARGET_FILE:App> ${CMAKE_CURRENT_BINARY_DIR}/batch-acceptance
         CONFIGURATIONS Release)
     set_tests_properties(BenchmarkBatchAcceptance PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+    add_test(NAME BenchmarkerGuiAcceptance COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_CURRENT_SOURCE_DIR}/integration/benchmarker_gui_tests.py --integration
+        $<TARGET_FILE:App> ${CMAKE_CURRENT_BINARY_DIR}/gui-acceptance
+        CONFIGURATIONS Release)
+    set_tests_properties(BenchmarkerGuiAcceptance PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 endif()
 
 include(GoogleTest)

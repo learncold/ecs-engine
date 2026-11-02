@@ -10,9 +10,12 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 from contextlib import redirect_stdout
+from xml.etree import ElementTree
+from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/run_benchmarks.py"
@@ -288,10 +291,10 @@ class BatchTests(unittest.TestCase):
             write_csv(path, rows)
             return subprocess.CompletedProcess(command, 0)
 
-        with patch.object(batch.subprocess, "run", side_effect=process), redirect_stdout(io.StringIO()):
+        with patch.object(batch, "run_process", side_effect=process), redirect_stdout(io.StringIO()):
             self.assertEqual(batch.run_suite(config, raw, self.config_path, cache), 1)
         folder = next(Path(config["output_directory"]).iterdir())
-        with (folder / "results.csv").open(newline="", encoding="utf-8") as stream:
+        with (folder / "results.csv").open(newline="", encoding="utf-8-sig") as stream:
             results = list(csv.DictReader(stream))
         self.assertEqual(len(calls), 6)
         self.assertEqual([row["status"] for row in results], ["failed"] * 5 + ["success"])
@@ -304,8 +307,8 @@ class BatchTests(unittest.TestCase):
             self.assertTrue(Path(result["log_path"]).is_file())
             command = json.loads(Path(result["command_path"]).read_text())
             self.assertEqual(command["argv"][0], config["executable"])
-        with patch.object(batch.subprocess, "run", side_effect=process), redirect_stdout(io.StringIO()):
-            batch.run_suite(config, raw, self.config_path, cache)
+        with patch.object(batch, "run_process", side_effect=process), redirect_stdout(io.StringIO()):
+            batch.run_suite(config, raw, self.config_path, cache, fresh=True)
         self.assertEqual(len(list(Path(config["output_directory"]).iterdir())), 2)
         self.assertTrue(all(path.read_bytes() == value for path, value in saved.items()))
 
@@ -334,13 +337,235 @@ class BatchTests(unittest.TestCase):
             executable.write_bytes(b"rebuilt during experiment")
             return subprocess.CompletedProcess(command, 0)
 
-        with patch.object(batch.subprocess, "run", side_effect=process) as launch, redirect_stdout(io.StringIO()):
+        with patch.object(batch, "run_process", side_effect=process) as launch, redirect_stdout(io.StringIO()):
             self.assertEqual(batch.run_suite(config, raw, self.config_path, cache), 1)
         self.assertEqual(launch.call_count, 1)
         folder = next(Path(config["output_directory"]).iterdir())
-        with (folder / "results.csv").open(newline="", encoding="utf-8") as stream:
+        with (folder / "results.csv").open(newline="", encoding="utf-8-sig") as stream:
             results = list(csv.DictReader(stream))
         self.assertTrue(all(row["status"] == "failed" and "Executable changed" in row["error"] for row in results))
+
+    def suite_fixture(self):
+        config, raw = self.load()
+        Path(config["executable"]).write_bytes(b"fixed executable")
+        cache = self.folder / "CMakeCache.txt"
+        cache.write_text("test cache")
+        return config, raw, cache
+
+    def successful_process(self, config, command, **kwargs):
+        args = dict(zip(command[2::2], command[3::2]))
+        condition = next(c for c in config["conditions"] if c["implementation"] == args["--implementation"])
+        write_csv(Path(command[-1]), fixture_rows(config, condition))
+        return subprocess.CompletedProcess(command, 0)
+
+    def test_resume_skips_success_retries_failures_and_preserves_attempts(self):
+        config, raw, cache = self.suite_fixture()
+        config["repetitions"] = 1
+        count = 0
+
+        def process(command, **kwargs):
+            nonlocal count
+            count += 1
+            if count == 2:
+                return subprocess.CompletedProcess(command, 7)
+            return self.successful_process(config, command, **kwargs)
+
+        with patch.object(batch, "run_process", side_effect=process), redirect_stdout(io.StringIO()):
+            self.assertEqual(batch.run_suite(config, raw, self.config_path, cache), 1)
+        folder = next(Path(config["output_directory"]).iterdir())
+        attempts = batch.read_attempts(folder / "attempts.jsonl")
+        originals = {Path(row["csv_path"]): Path(row["csv_path"]).read_bytes()
+                     for row in attempts if row["status"] == "success"}
+        with patch.object(batch, "run_process", side_effect=process) as child, redirect_stdout(io.StringIO()):
+            self.assertEqual(batch.run_suite(config, raw, self.config_path, cache), 0)
+            self.assertEqual(child.call_count, 1)
+            child.reset_mock()
+            self.assertEqual(batch.run_suite(config, raw, self.config_path, cache), 0)
+            child.assert_not_called()
+        self.assertEqual(len(list(Path(config["output_directory"]).iterdir())), 1)
+        self.assertTrue(all(path.read_bytes() == value for path, value in originals.items()))
+        attempts = batch.read_attempts(folder / "attempts.jsonl")
+        self.assertEqual(len(attempts), 4)
+        self.assertEqual(attempts[-1]["attempt"], 2)
+        self.assertNotEqual(attempts[1]["log_path"], attempts[-1]["log_path"])
+        self.assertTrue(Path(attempts[1]["log_path"]).exists())
+        self.assertEqual(json.loads((folder / "summary.json").read_text())["successes"], 3)
+
+    def test_interrupt_resume_and_excel_checkpoint(self):
+        config, raw, cache = self.suite_fixture()
+        count = 0
+
+        def process(command, **kwargs):
+            nonlocal count
+            count += 1
+            if count == 2:
+                raise KeyboardInterrupt()
+            return self.successful_process(config, command, **kwargs)
+
+        with patch.object(batch, "run_process", side_effect=process), redirect_stdout(io.StringIO()):
+            self.assertEqual(batch.run_suite(config, raw, self.config_path, cache), 130)
+        folder = next(Path(config["output_directory"]).iterdir())
+        self.assertFalse((folder / "summary.json").exists())
+        attempts = batch.read_attempts(folder / "attempts.jsonl")
+        self.assertEqual([row["status"] for row in attempts], ["success", "interrupted"])
+        ns = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        with ZipFile(folder / "results.xlsx") as archive:
+            self.assertIsNone(archive.testzip())
+            for name in archive.namelist():
+                ElementTree.fromstring(archive.read(name))
+            sheet = ElementTree.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+            self.assertEqual(len(sheet.findall("s:sheetData/s:row", ns)), 7)
+            self.assertIn(b"pending", archive.read("xl/worksheets/sheet1.xml"))
+            self.assertIn(b"mean_step_ms", archive.read("xl/worksheets/sheet1.xml"))
+            self.assertIn(b"OS query failed", archive.read("xl/worksheets/sheet1.xml"))
+            self.assertTrue(sheet.findall(".//s:c/s:v", ns), "Measurements must be numeric Excel cells")
+        # A partial final journal write must not lose earlier completed tasks.
+        with (folder / "attempts.jsonl").open("ab") as stream:
+            stream.write(b'{"order":')
+        with patch.object(batch, "run_process", side_effect=process) as child, redirect_stdout(io.StringIO()):
+            self.assertEqual(batch.run_suite(config, raw, self.config_path, cache), 0)
+            self.assertEqual(child.call_count, 5)
+        self.assertEqual(len(batch.read_attempts(folder / "attempts.jsonl")), 7)
+
+    def test_corrupt_saved_csv_is_remeasured_and_previous_attempt_kept(self):
+        config, raw, cache = self.suite_fixture()
+        config["repetitions"] = 1
+        process = lambda command, **kwargs: self.successful_process(config, command, **kwargs)
+        with patch.object(batch, "run_process", side_effect=process), redirect_stdout(io.StringIO()):
+            batch.run_suite(config, raw, self.config_path, cache)
+        folder = next(Path(config["output_directory"]).iterdir())
+        attempts = batch.read_attempts(folder / "attempts.jsonl")
+        broken = Path(attempts[0]["csv_path"])
+        broken.write_text("truncated CSV")
+        with patch.object(batch, "run_process", side_effect=process) as child, redirect_stdout(io.StringIO()):
+            self.assertEqual(batch.run_suite(config, raw, self.config_path, cache, resume=folder), 0)
+            self.assertEqual(child.call_count, 1)
+        self.assertEqual(broken.read_text(), "truncated CSV")
+        self.assertEqual(batch.read_attempts(folder / "attempts.jsonl")[-1]["attempt"], 2)
+
+    def test_explicit_resume_rejects_config_binary_runner_cache_changes(self):
+        config, raw, cache = self.suite_fixture()
+        process = lambda command, **kwargs: self.successful_process(config, command, **kwargs)
+        with patch.object(batch, "run_process", side_effect=process), redirect_stdout(io.StringIO()):
+            batch.run_suite(config, raw, self.config_path, cache)
+        folder = next(Path(config["output_directory"]).iterdir())
+        with patch.object(batch, "run_process") as child, redirect_stdout(io.StringIO()):
+            changed = copy.deepcopy(config)
+            changed["seed"] += 1
+            with self.assertRaisesRegex(ValueError, "identical settings"):
+                batch.run_suite(changed, raw, self.config_path, cache, resume=folder)
+            cache.write_text("changed toolset")
+            with self.assertRaisesRegex(ValueError, "identical settings"):
+                batch.run_suite(config, raw, self.config_path, cache, resume=folder)
+            cache.write_text("test cache")
+            Path(config["executable"]).write_bytes(b"rebuild")
+            with self.assertRaisesRegex(ValueError, "identical settings"):
+                batch.run_suite(config, raw, self.config_path, cache, resume=folder)
+            Path(config["executable"]).write_bytes(b"fixed executable")
+            original = batch.digest
+            with patch.object(batch, "digest", side_effect=lambda p: "new runner" if p == SCRIPT else original(p)):
+                with self.assertRaisesRegex(ValueError, "identical settings"):
+                    batch.run_suite(config, raw, self.config_path, cache, resume=folder)
+            child.assert_not_called()
+
+    def test_locked_workbook_keeps_journal_and_csv_and_recovers_on_resume(self):
+        config, raw, cache = self.suite_fixture()
+        process = lambda command, **kwargs: self.successful_process(config, command, **kwargs)
+        with patch.object(batch, "write_workbook", side_effect=PermissionError("Excel holds the file")), \
+                patch.object(batch, "run_process", side_effect=process), redirect_stdout(io.StringIO()):
+            self.assertEqual(batch.run_suite(config, raw, self.config_path, cache), 0)
+        folder = next(Path(config["output_directory"]).iterdir())
+        self.assertEqual(len(batch.read_attempts(folder / "attempts.jsonl")), 6)
+        self.assertFalse((folder / "results.xlsx").exists())
+        with patch.object(batch, "run_process") as child, redirect_stdout(io.StringIO()):
+            batch.run_suite(config, raw, self.config_path, cache)
+            child.assert_not_called()
+        self.assertTrue((folder / "results.xlsx").exists())
+
+    def test_orphan_artifacts_are_preserved_before_retry(self):
+        config, raw, cache = self.suite_fixture()
+        process = lambda command, **kwargs: self.successful_process(config, command, **kwargs)
+        with patch.object(batch, "run_process", side_effect=KeyboardInterrupt()), redirect_stdout(io.StringIO()):
+            batch.run_suite(config, raw, self.config_path, cache)
+        folder = next(Path(config["output_directory"]).iterdir())
+        # Simulate death between writing command/log/CSV and journal commit.
+        (folder / "attempts.jsonl").write_bytes(b"")
+        saved = {p: p.read_bytes() for p in folder.glob("*-attempt-0001.*")}
+        with patch.object(batch, "run_process", side_effect=process), redirect_stdout(io.StringIO()):
+            batch.run_suite(config, raw, self.config_path, cache)
+        self.assertTrue(all(p.read_bytes() == value for p, value in saved.items()))
+        self.assertEqual(batch.read_attempts(folder / "attempts.jsonl")[0]["attempt"], 2)
+
+    def test_process_timeout_is_reaped_before_next_child(self):
+        with tempfile.TemporaryFile() as log:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                batch.run_process([sys.executable, "-c", "import time; time.sleep(10)"],
+                                  cwd=self.folder, stdout=log, stderr=subprocess.STDOUT,
+                                  timeout=0.05, progress=lambda: None)
+            result = batch.run_process([sys.executable, "-c", "print('next')"],
+                                       cwd=self.folder, stdout=log, stderr=subprocess.STDOUT,
+                                       timeout=10, progress=lambda: None)
+            self.assertEqual(result.returncode, 0)
+
+    def test_shuffled_order_is_repeatable_and_records_original_condition_ids(self):
+        config = copy.deepcopy(self.config)
+        config["order_seed"] = 2026
+        config["repetitions"] = 10
+        tasks = batch.task_list(config)
+        self.assertEqual(tasks, batch.task_list(config))
+        orders = []
+        for repeat in range(1, 11):
+            group = [task for task in tasks if task["repetition"] == repeat]
+            self.assertEqual(sorted(task["condition"] for task in group), [1, 2, 3])
+            for task in group:
+                self.assertEqual(task["implementation"], config["conditions"][task["condition"] - 1]["implementation"])
+            orders.append(tuple(task["condition"] for task in group))
+        self.assertGreater(len(set(orders)), 1)
+
+    def test_research_presets_have_expected_complete_comparisons(self):
+        for name, count in (("thesis", 810), ("pilot", 27)):
+            config, _ = batch.load_config(ROOT / "benchmarks" / (name + ".json"))
+            self.assertEqual(len(batch.task_list(config)), count)
+            groups = {}
+            for condition in config["conditions"]:
+                key = tuple(condition[field] for field in ("boid_count", "dummy_count", "dummy_change_percent"))
+                groups.setdefault(key, set()).add(condition["implementation"])
+                if condition["dummy_count"] == 0:
+                    self.assertEqual(condition["dummy_change_percent"], 0)
+            self.assertTrue(all(implementations == {"oop", "ecs", "archetype"} for implementations in groups.values()))
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows job lifecycle")
+    def test_force_closing_runner_terminates_assigned_child(self):
+        import ctypes
+        ready, pid_file = self.folder / "ready", self.folder / "pid"
+        child_code = f"import os,time; from pathlib import Path; Path({str(pid_file)!r}).write_text(str(os.getpid())); time.sleep(30)"
+        parent_code = (f"import sys,subprocess; from pathlib import Path; sys.path.insert(0, {str(SCRIPT.parent)!r}); "
+                       f"import run_benchmarks as b; log=open({str(self.folder / 'child.log')!r},'wb'); "
+                       f"b.run_process([sys.executable,'-c',{child_code!r}],cwd=Path({str(self.folder)!r}),"
+                       f"stdout=log,stderr=subprocess.STDOUT,timeout=30,progress=lambda: Path({str(ready)!r}).touch())")
+        parent = subprocess.Popen([sys.executable, "-c", parent_code], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        handle = None
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.OpenProcess.argtypes = (ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32)
+        kernel.OpenProcess.restype = ctypes.c_void_p
+        kernel.WaitForSingleObject.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+        kernel.CloseHandle.argtypes = (ctypes.c_void_p,)
+        try:
+            deadline = time.monotonic() + 10
+            while not ready.exists() and time.monotonic() < deadline and parent.poll() is None:
+                time.sleep(0.05)
+            self.assertTrue(ready.exists(), "Runner must assign its live child before force-close")
+            handle = kernel.OpenProcess(0x100000, False, int(pid_file.read_text()))
+            self.assertTrue(handle)
+            parent.kill()
+            parent.wait(timeout=5)
+            self.assertEqual(kernel.WaitForSingleObject(handle, 5000), 0, "Orphan child still running")
+        finally:
+            if parent.poll() is None:
+                parent.kill()
+            parent.wait(timeout=5)
+            if handle:
+                kernel.CloseHandle(handle)
 
 
 def integration(app, output):
@@ -354,7 +579,7 @@ def integration(app, output):
     saved = {}
     for invocation in range(2):
         previous_folders = set(Path(config["output_directory"]).glob("*"))
-        subprocess.run([sys.executable, str(SCRIPT), str(config_path)], check=True, timeout=120)
+        subprocess.run([sys.executable, str(SCRIPT), str(config_path), "--new"], check=True, timeout=120)
         new_folders = set(Path(config["output_directory"]).iterdir()) - previous_folders
         assert len(new_folders) == 1
         if saved:
@@ -362,7 +587,7 @@ def integration(app, output):
         folder = new_folders.pop()
         summary = json.loads((folder / "summary.json").read_text())
         assert summary == {"successes": 12, "failures": 0, "total": 12}, summary
-        with (folder / "results.csv").open(newline="", encoding="utf-8") as stream:
+        with (folder / "results.csv").open(newline="", encoding="utf-8-sig") as stream:
             results = list(csv.DictReader(stream))
         assert len(results) == 12
         run_ids = set()
@@ -381,6 +606,16 @@ def integration(app, output):
             run_ids.add(environment["run_id"])
         assert len(run_ids) == 12, "Every experiment must have a separate run identity"
         assert len({row["csv_path"] for row in results}) == 12
+        # Same command must revalidate and skip every completed experiment.
+        evidence = {Path(row[key]): Path(row[key]).read_bytes() for row in results
+                    for key in ("csv_path", "log_path", "command_path")}
+        journal = (folder / "attempts.jsonl").read_bytes()
+        folders_before_resume = set(Path(config["output_directory"]).iterdir())
+        subprocess.run([sys.executable, str(SCRIPT), str(config_path)], check=True, timeout=30)
+        assert set(Path(config["output_directory"]).iterdir()) == folders_before_resume
+        assert (folder / "attempts.jsonl").read_bytes() == journal, "Resume reran completed experiments"
+        assert all(path.read_bytes() == value for path, value in evidence.items())
+        assert (folder / "results.xlsx").is_file()
         saved.update({path: path.read_bytes() for path in folder.iterdir()})
     # A valid float32 dt can still overflow simulation integration. Check the
     # actual CLI's failure code and continuation into a Dummy-only success.
@@ -390,14 +625,14 @@ def integration(app, output):
     failure_config = output / "failure-continuation.json"
     failure_config.write_text(json.dumps(config, indent=2), encoding="utf-8")
     previous_folders = set(Path(config["output_directory"]).iterdir())
-    child = subprocess.run([sys.executable, str(SCRIPT), str(failure_config)], timeout=30)
+    child = subprocess.run([sys.executable, str(SCRIPT), str(failure_config), "--new"], timeout=30)
     assert child.returncode == 1, "A failed experiment must fail the batch CLI"
     assert all(path.read_bytes() == value for path, value in saved.items())
     new_folders = set(Path(config["output_directory"]).iterdir()) - previous_folders
     assert len(new_folders) == 1
     folder = new_folders.pop()
     assert json.loads((folder / "summary.json").read_text()) == {"successes": 1, "failures": 1, "total": 2}
-    with (folder / "results.csv").open(newline="", encoding="utf-8") as stream:
+    with (folder / "results.csv").open(newline="", encoding="utf-8-sig") as stream:
         failed, succeeded = list(csv.DictReader(stream))
     assert failed["status"] == "failed" and failed["exit_code"] == "1"
     assert not Path(failed["csv_path"]).exists()

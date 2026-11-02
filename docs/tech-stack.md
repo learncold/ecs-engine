@@ -14,6 +14,7 @@ C++20과 CMake로 경량 ECS 런타임과 headless 3D Boids 시뮬레이션을 �
 | GLM | 3D 벡터·회전과 CPU Transform 계산 |
 | GoogleTest / CTest | 단위·통합 테스트와 실행 검증 |
 | Python 3.10+ 표준 라이브러리 | 조건별 반복 실행, CSV 검증과 실행 도구 테스트 |
+| Tkinter / ttk | 별도 측정 GUI의 조건 편집·진행률·중단·재개 |
 | OpenGL 3.3 Core Profile | 기존 시각화의 렌더링 API |
 | GLFW | 기존 시각화의 창·컨텍스트·입력 |
 | GLAD | OpenGL 함수 로딩 |
@@ -33,6 +34,9 @@ C++20과 CMake로 경량 ECS 런타임과 headless 3D Boids 시뮬레이션을 �
 - 새 의존성은 연구에 필요하거나 구현 위험을 실질적으로 줄이는 경우에만 추가한다.
 - 전체 테스트 빌드는 Python 3.10 이상의 인터프리터를 CMake에서 찾는다.
   반복 벤치마크 도구도 같은 Python 표준 라이브러리만 사용하며 pip 패키지는 필요 없다.
+- 측정 GUI는 Python의 선택 모듈인 Tkinter가 필요하다. `python -m tkinter`로
+  설치 상태를 확인한다. GUI는 별도 OpenGL 창이나 컨텍스트를 만들지 않는다.
+  Tkinter가 없는 Python에서는 GUI 테스트를 건너뛰며 CLI 측정 도구는 사용할 수 있다.
 
 빌드·실행 명령은 [README](../README.md)를 따른다.
 
@@ -74,9 +78,15 @@ Windows `MoveFileExW`로 최종 경로에 반영한다. 추가 패키지는 없�
 
 `scripts/run_benchmarks.py`는 Windows에서 JSON 설정별로 같은 VS2022 x64 Release
 실행 파일을 순차 실행한다. `subprocess`로 자식 종료를 기다리고, `ctypes`로 이름 있는
-Windows mutex를 사용해 실행 도구의 중복 실행을 막는다. 설정·명령·로그·원자료·판정과
-실행 파일 SHA-256을 새 결과 폴더에 보존한다. 실행법은
+Windows mutex를 사용해 실행 도구의 중복 실행을 막고 Job Object로 자식 수명을 관리한다.
+설정·명령·로그·원자료·판정과 실행 파일 SHA-256을 보존한다. JSONL 완료 기록으로
+중단 후 재개하며, CSV와 `.xlsx` 요약을 실행마다 갱신한다. Excel 파일은 표준 라이브러리의
+`zipfile`과 XML로 작성하며 Excel 설치나 추가 pip 패키지가 필요 없다. 실행법은
 [반복 벤치마크](benchmark-batches.md)를 참고한다.
+
+측정 GUI는 Tkinter의 주 스레드와 작업 스레드 사이에 `queue`·`threading.Event`를
+사용한다. 프로젝트 폴더의 `project.json`에 설정·편집·화면 상태를 저장하고 `Result`
+아래에 실행 기록을 보존한다. 프로젝트 JSON은 임시 파일을 flush·fsync한 뒤 교체한다.
 
 모듈 경계는 [아키텍처](architecture.md), 연구 범위와 측정 기준은
 [연구·실험·논문 기준](research-goals.md)을 따른다.

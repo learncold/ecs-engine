@@ -46,6 +46,10 @@ cmake --build --preset vs2022-release
 조건별 반복 실행은 `python -B scripts/run_benchmarks.py benchmarks/smoke.json`으로
 수행합니다. JSON 설정, 결과 보존과 검증 방법은 [반복 벤치마크](docs/benchmark-batches.md)를 참고합니다.
 
+GUI에서는 프로젝트별 설정 편집, 실행 기록 관리와 중단 후 재개를 지원합니다.
+Tkinter가 포함된 Python으로 `python -B scripts/benchmarker_gui.py`를 실행한 뒤
+프로젝트 폴더를 생성하거나 엽니다. 설정은 `project.json`, 실행 결과는 `Result/`에 저장합니다.
+
 ## 구조
 
 - `Engine/`: ECS, 공통 런타임과 벤치마크 지원
