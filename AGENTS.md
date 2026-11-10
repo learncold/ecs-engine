@@ -2,6 +2,7 @@
 
 ## Research and Documentation
 
+- Preserve the current thesis title while the team reviews a change; do not suggest or apply a title change unless explicitly requested.
 - Read [docs/research-goals.md](docs/research-goals.md) before changing simulation,
   ECS storage or benchmarking. Sections 3–6 define the research requirements;
   section 8 defines validation and completion criteria.
